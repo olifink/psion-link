@@ -1,59 +1,76 @@
-# PsionLink
+# Psion Link
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.7.
+A Chrome-only, local-first PWA that speaks the Psion Link Protocol (PLP)
+over WebSerial, so EPOC32-era Psion handhelds (Series 5, 5mx, Revo,
+netBook 7) can be browsed and synced from a modern Chromebook/Chrome
+machine — no drivers, no native binaries, no cloud round-trip.
 
-## Development server
+File transfer and basic filesystem management is the whole product: browse
+drives/directories, upload/download, rename/delete, mkdir, device info.
 
-To start a local development server, run:
+See [`BRIEF.md`](./BRIEF.md) for the full handoff spec and [`CLAUDE.md`](./CLAUDE.md)
+for the binding architecture decisions.
 
-```bash
-ng serve
-```
+## Progress
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+**Protocol core** (`src/protocol/`, framework-free, built bottom-up — see CLAUDE.md):
 
-## Code scaffolding
+- [x] **Physical** — `transport/`: WebSerial `SerialPort` wrapper, 8N1 +
+      hardware flow control, autobaud rate table, DTR/RTS assertion, DSR
+      cable-pull detection.
+- [ ] **Data link** — `link/`: SYN/DLE/STX framing, byte-stuffing,
+      CRC-16/XMODEM (done, `link/crc16.ts`), ARQ, EPOC connection state
+      machine (`Idle → Idle_Req → Idle_Ack → Data → Data_Ack`).
+- [ ] **Session (NCP)** — `ncp/`: channel multiplexing, fragmentation,
+      NCP Information frame, connect to `SYS$RFSV.*`.
+- [ ] **Presentation (RFSV32)** — `rfsv/`: file service commands (open/read
+      dir, open/create/read/write/close file, delete, rename, mkdir, rmdir,
+      path test, drive list, volume info).
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+**Angular shell:**
 
-```bash
-ng generate component component-name
-```
+- [x] Angular v22 workspace, standalone components + Signals, bun tooling
+- [x] `@angular/pwa` (service worker + manifest)
+- [x] Angular Material, M3 custom-theme Sass API (density/typography
+      tuning toward Expressive still pending — see CLAUDE.md "UI sensibility")
+- [x] `PsionLinkService` seam stub (owns `SerialPort`, exposes connection
+      state as Signals) — not yet wired to the protocol core
+- [ ] File browser UI (breadcrumbs, drag-and-drop upload, per-file progress)
+- [ ] Connection-status indicator
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Tooling
 
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
+Everything goes through `bun` — never `npm`/`node`/`npx`.
 
 ```bash
-ng e2e
+bun install       # install deps
+bun start         # dev server (ng serve)
+bun run build     # production bundle (ng build)
+bun test          # protocol-core unit tests (pure TS, src/protocol only)
+bunx ng test      # Angular component tests (Vitest)
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Run a single protocol-core test file with `bun test path/to/file.test.ts`;
+filter by name with `bun test -t "<pattern>"`.
 
-## Additional Resources
+## Architecture
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+The protocol core (`src/protocol/{transport,link,ncp,rfsv}`) is plain
+TypeScript with no `@angular/*` imports, independently unit-testable under
+`bun test` with no TestBed, zone.js, or DOM. Angular touches it through
+exactly one seam — `PsionLinkService` — which owns the `SerialPort` handle
+and adapts the core's async API to Signals for the UI. See CLAUDE.md for
+why this line matters and what happens if it gets crossed.
+
+## Scope
+
+**v1**: EPOC32 only (Series 5, 5mx, Revo, netBook 7), Chrome/Chromium/ChromeOS
+only, RS232 over USB-serial adapter. **Out of scope**: SIBO/Series 3,
+raw SSD flash imaging, clipboard/print/registry/process-control servers,
+infrared, Bluetooth, wireless/headless bridge. Full detail in `BRIEF.md` §1.
+
+## References
+
+- PLP spec: https://plptools.sourceforge.net/plp.html
+- plptools (reference implementation): https://github.com/plptools/plptools
+- WebSerial spec: https://wicg.github.io/serial/

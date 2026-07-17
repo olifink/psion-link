@@ -4,7 +4,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["bun-types"]
+    "types": ["bun-types", "w3c-web-serial"]
   },
   "include": ["src/protocol/**/*.ts"]
 }

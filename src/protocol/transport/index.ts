@@ -8,4 +8,6 @@
  *
  * Framework-free: no `@angular/*` imports. See CLAUDE.md "Architecture".
  */
-export {};
+export { AUTOBAUD_RATES, PHYSICAL_SERIAL_OPTIONS } from './serial-options';
+export { WebSerialTransport } from './webserial-transport';
+export type { CableState, CableStateListener } from './webserial-transport';
