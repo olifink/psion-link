@@ -7,3 +7,8 @@
  * Framework-free: no `@angular/*` imports. See CLAUDE.md "Architecture".
  */
 export { crc16Xmodem } from './crc16';
+export { PduType, SYN, DLE, STX, ETX, EOT } from './constants';
+export { encodeContSeq, decodeContSeq } from './cont-seq';
+export type { ContSeqHeader, DecodedContSeq } from './cont-seq';
+export { encodeFrame, FrameDecoder } from './framing';
+export type { FrameEncodeOptions, DecodedFrame } from './framing';

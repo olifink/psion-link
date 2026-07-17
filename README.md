@@ -18,9 +18,11 @@ for the binding architecture decisions.
 - [x] **Physical** — `transport/`: WebSerial `SerialPort` wrapper, 8N1 +
       hardware flow control, autobaud rate table, DTR/RTS assertion, DSR
       cable-pull detection.
-- [ ] **Data link** — `link/`: SYN/DLE/STX framing, byte-stuffing,
-      CRC-16/XMODEM (done, `link/crc16.ts`), ARQ, EPOC connection state
-      machine (`Idle → Idle_Req → Idle_Ack → Data → Data_Ack`).
+- [ ] **Data link** — `link/`: SYN/DLE/STX framing + byte-stuffing +
+      CRC-16/XMODEM (done: `crc16.ts`, `framing.ts`, `cont-seq.ts`, byte
+      layout confirmed against plptools' `lib/link.cc`/`datalink.cc`),
+      ARQ + EPOC connection state machine (`Idle → Idle_Req → Idle_Ack →
+      Data → Data_Ack`) still pending.
 - [ ] **Session (NCP)** — `ncp/`: channel multiplexing, fragmentation,
       NCP Information frame, connect to `SYS$RFSV.*`.
 - [ ] **Presentation (RFSV32)** — `rfsv/`: file service commands (open/read
