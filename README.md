@@ -26,8 +26,17 @@ for the binding architecture decisions.
       against plptools' `lib/link.cc`/`datalink.cc` and the PLP spec's own
       "State Machine" section. Client/initiator role only — we never
       accept incoming connections. Not yet wired to `WebSerialTransport`.
-- [ ] **Session (NCP)** — `ncp/`: channel multiplexing, fragmentation,
-      NCP Information frame, connect to `SYS$RFSV.*`.
+- [x] **Session (NCP)** — `ncp/`: general frame codec + fragmentation/
+      reassembly (`frame.ts`, `fragmentation.ts`), channel-multiplexing
+      orchestration (`session.ts`: `NcpSession` sends the NCP Information
+      frame, `connectToServer("SYS$RFSV")` opens a channel and hands back
+      a pub/sub `NcpChannel`). Client/initiator role only, matching
+      `LinkConnection`. Byte layout cross-checked against the PLP spec's
+      "Session Layer" section and plptools' `lib/ncp.cc`/`linkchannel.cc`/
+      `socketchannel.cc`. Two known gaps, documented in `session.ts`: no
+      response to a peer-initiated `LINK.*` Connect request (open question
+      against real hardware), and no Link Register fallback if a direct
+      `SYS$RFSV.*` connect fails. Not yet wired to `LinkConnection`.
 - [ ] **Presentation (RFSV32)** — `rfsv/`: file service commands (open/read
       dir, open/create/read/write/close file, delete, rename, mkdir, rmdir,
       path test, drive list, volume info).
