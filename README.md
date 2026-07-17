@@ -25,7 +25,7 @@ for the binding architecture decisions.
       doc comment). Byte layout and state transitions cross-checked
       against plptools' `lib/link.cc`/`datalink.cc` and the PLP spec's own
       "State Machine" section. Client/initiator role only — we never
-      accept incoming connections. Not yet wired to `WebSerialTransport`.
+      accept incoming connections.
 - [x] **Session (NCP)** — `ncp/`: general frame codec + fragmentation/
       reassembly (`frame.ts`, `fragmentation.ts`), channel-multiplexing
       orchestration (`session.ts`: `NcpSession` sends the NCP Information
@@ -36,7 +36,16 @@ for the binding architecture decisions.
       `socketchannel.cc`. Two known gaps, documented in `session.ts`: no
       response to a peer-initiated `LINK.*` Connect request (open question
       against real hardware), and no Link Register fallback if a direct
-      `SYS$RFSV.*` connect fails. Not yet wired to `LinkConnection`.
+      `SYS$RFSV.*` connect fails.
+- [x] **End-to-end wiring** — `connection.ts`: `PlpConnection` pumps bytes
+      between `WebSerialTransport` and `LinkConnection`, and payloads
+      between `LinkConnection` and `NcpSession`; runs the BRIEF.md §4.1
+      autobaud cascade (115200 → 9600) against a raw `SerialPort`; wires
+      DSR cable-pull detection into session teardown. `connect(port)`
+      resolves with an `NcpChannel` already connected to SYS$RFSV — the
+      handoff point for the RFSV32 layer below. Integration-tested against
+      a fake Psion peer built from the project's own encode/decode
+      primitives (`connection.test.ts`), not mocked at the seam.
 - [ ] **Presentation (RFSV32)** — `rfsv/`: file service commands (open/read
       dir, open/create/read/write/close file, delete, rename, mkdir, rmdir,
       path test, drive list, volume info).
