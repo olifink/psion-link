@@ -7,5 +7,6 @@
 export * from './transport';
 export * from './link';
 export * from './ncp';
+export * from './rfsv';
 export { PlpConnection } from './connection';
 export type { PlpConnectionState, PlpConnectionOptions } from './connection';

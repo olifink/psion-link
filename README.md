@@ -46,9 +46,21 @@ for the binding architecture decisions.
       handoff point for the RFSV32 layer below. Integration-tested against
       a fake Psion peer built from the project's own encode/decode
       primitives (`connection.test.ts`), not mocked at the seam.
-- [ ] **Presentation (RFSV32)** — `rfsv/`: file service commands (open/read
-      dir, open/create/read/write/close file, delete, rename, mkdir, rmdir,
-      path test, drive list, volume info).
+- [x] **Presentation (RFSV32)** — `rfsv/`: command/reply codec
+      (`frame.ts`), EPOC-charset strings (`strings.ts`: Windows-1252 per
+      the PLP spec's "Character Sets" section, with a Unicode/UTF-16LE
+      path via the length field's top bit), 64-bit EPOC-epoch timestamps
+      (`time.ts`), the `RFSV32_READ_DIR` batched multi-entry reply parser
+      (`readdir.ts` — the exact alignment padding BRIEF.md §4.4 warns
+      about, confirmed byte-for-byte against plptools' `RFSV32::readdir`),
+      and `RfsvClient` (`client.ts`): opId-matched request/reply, MVP
+      command set (drive list, volume info, open/read/close dir,
+      open/create/read/write/close file, delete, rename, mkdir, rmdir,
+      path test). No Link Register fallback, no `RFSV32_SEEK_FILE`/lock
+      commands — out of scope for the MVP set BRIEF.md tabulates. Device
+      timezone offset not applied to modification times (plptools'
+      `PsiTime` does; would need a TZ-emulation port). Not yet wired to
+      `PlpConnection`.
 
 **Angular shell:**
 
