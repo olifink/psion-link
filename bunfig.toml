@@ -1,0 +1,5 @@
+# `bun test` targets the framework-free protocol core only; Angular specs
+# (*.spec.ts) run under `ng test` / vitest, which needs TestBed/zone.js
+# that bun:test doesn't provide. See CLAUDE.md "Architecture".
+[test]
+root = "./src/protocol"
