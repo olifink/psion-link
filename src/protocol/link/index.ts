@@ -12,3 +12,8 @@ export { encodeContSeq, decodeContSeq } from './cont-seq';
 export type { ContSeqHeader, DecodedContSeq } from './cont-seq';
 export { encodeFrame, FrameDecoder } from './framing';
 export type { FrameEncodeOptions, DecodedFrame } from './framing';
+export { retransmitTimeoutMs, INACTIVITY_TIMEOUT_MS, CONNECT_RETRIES, DATA_RETRIES, MAX_OUTSTANDING, MAX_PAYLOAD_BYTES } from './timing';
+export { SYSTEM_CLOCK } from './clock';
+export type { Clock } from './clock';
+export { LinkConnection } from './connection';
+export type { ConnectionState, LinkConnectionOptions } from './connection';
