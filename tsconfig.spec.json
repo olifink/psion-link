@@ -4,7 +4,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/spec",
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "w3c-web-serial"]
   },
   "include": ["src/**/*.d.ts", "src/**/*.spec.ts"]
 }

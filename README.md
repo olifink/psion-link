@@ -69,8 +69,15 @@ for the binding architecture decisions.
 - [x] `@angular/pwa` (service worker + manifest)
 - [x] Angular Material, M3 custom-theme Sass API (density/typography
       tuning toward Expressive still pending — see CLAUDE.md "UI sensibility")
-- [x] `PsionLinkService` seam stub (owns `SerialPort`, exposes connection
-      state as Signals) — not yet wired to the protocol core
+- [x] `PsionLinkService` (`core/psion-link.service.ts`): the one seam onto
+      the protocol core. `connect()` calls `navigator.serial.requestPort()`
+      then drives a `PlpConnection` through it; `connectionState`,
+      `negotiatedBaudRate`, `peer` (NCP Information frame), `lastError`,
+      and `rfsv` (the connected `RfsvClient`) are all exposed as readonly
+      Signals. `isSupported` feature-detects `'serial' in navigator` for
+      the Chrome-only gate. Tested against the same fake-Psion-peer pattern
+      as `connection.test.ts`, via `ng test`/Vitest rather than `bun test`
+      since it's Angular-aware.
 - [ ] File browser UI (breadcrumbs, drag-and-drop upload, per-file progress)
 - [ ] Connection-status indicator
 
