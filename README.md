@@ -59,8 +59,9 @@ for the binding architecture decisions.
       path test). No Link Register fallback, no `RFSV32_SEEK_FILE`/lock
       commands — out of scope for the MVP set BRIEF.md tabulates. Device
       timezone offset not applied to modification times (plptools'
-      `PsiTime` does; would need a TZ-emulation port). Not yet wired to
-      `PlpConnection`.
+      `PsiTime` does; would need a TZ-emulation port). Wired into
+      `PlpConnection`: `getRfsvClient()` returns an `RfsvClient` bound to
+      the SYS$RFSV channel once `connect()` resolves.
 
 **Angular shell:**
 

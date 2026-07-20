@@ -1,6 +1,7 @@
 import { AUTOBAUD_RATES, WebSerialTransport } from './transport';
 import { Clock, LinkConnection } from './link';
 import { NcpChannel, NcpSession } from './ncp';
+import { RfsvClient } from './rfsv';
 
 export type PlpConnectionState = 'disconnected' | 'negotiatingBaud' | 'linkConnected' | 'sessionReady' | 'failed';
 
@@ -27,7 +28,9 @@ const DEFAULT_CABLE_POLL_INTERVAL_MS = 1000;
  * `WebSerialTransport` (physical) <-> `LinkConnection` (data link, ARQ) <->
  * `NcpSession` (session, channel multiplexing). `connect()` autobauds
  * against a raw `SerialPort` and hands back an `NcpChannel` already
- * connected to SYS$RFSV, ready for the RFSV32 presentation layer.
+ * connected to SYS$RFSV; `getRfsvClient()` exposes the same channel wrapped
+ * as an `RfsvClient` (the RFSV32 presentation layer, `rfsv/client.ts`) for
+ * everything above the wire protocol to use instead.
  *
  * This is the object an Angular `PsionLinkService` (CLAUDE.md
  * "Architecture") is meant to adapt to Signals — the last framework-free
@@ -44,6 +47,7 @@ export class PlpConnection {
   private link: LinkConnection | null = null;
   private ncp: NcpSession | null = null;
   private rfsvChannel: NcpChannel | null = null;
+  private rfsvClient: RfsvClient | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private readLoopPromise: Promise<void> | null = null;
@@ -67,6 +71,11 @@ export class PlpConnection {
 
   getRfsvChannel(): NcpChannel | null {
     return this.rfsvChannel;
+  }
+
+  /** The RFSV32 file-service client bound to the SYS$RFSV channel, once `connect()` resolves. */
+  getRfsvClient(): RfsvClient | null {
+    return this.rfsvClient;
   }
 
   /**
@@ -96,6 +105,7 @@ export class PlpConnection {
   /** Tears everything down: RFSV channel, NCP session, data link, and the serial port. */
   async disconnect(): Promise<void> {
     this.rfsvChannel = null;
+    this.rfsvClient = null;
     this.link?.disconnect();
     await this.teardownTransport();
     this.link = null;
@@ -172,6 +182,7 @@ export class PlpConnection {
     try {
       const channel = await ncp.connectToServer('SYS$RFSV');
       this.rfsvChannel = channel;
+      this.rfsvClient = new RfsvClient(channel);
       this.setState('sessionReady');
       return channel;
     } catch (err) {
@@ -243,6 +254,7 @@ export class PlpConnection {
     }
     this.sessionEstablished = false;
     this.rfsvChannel = null;
+    this.rfsvClient = null;
     this.options.onFailed?.(reason);
     void this.teardownTransport().then(() => {
       this.link = null;

@@ -236,6 +236,25 @@ describe('PlpConnection.connect happy path', () => {
     expect(channel.remoteChannel).toBe(7);
     expect(h.states).toEqual(['negotiatingBaud', 'linkConnected', 'sessionReady']);
     expect(h.failures).toEqual([]);
+    expect(h.connection.getRfsvClient()).not.toBeNull();
+  });
+
+  test('the RFSV client sends its commands over the same channel the peer sees', async () => {
+    const h = createHarness();
+    await h.connection.connect(h.port as unknown as SerialPort);
+
+    const rfsv = h.connection.getRfsvClient()!;
+    // GetDriveList's reply never arrives (the fake peer doesn't answer RFSV32
+    // commands), so this promise is left pending by design; silence the
+    // resulting unhandled-rejection/never-settles warning rather than await it.
+    void rfsv.getDriveList().catch(() => {});
+
+    await Bun.sleep(0);
+
+    expect(h.peer.receivedChannelData).toHaveLength(1);
+    const sent = h.peer.receivedChannelData[0]!;
+    const reason = sent[0]! | (sent[1]! << 8);
+    expect(reason).toBe(0x13); // RfsvReason.GetDriveList
   });
 
   test('data sent through the RFSV channel reaches the peer and an echoed reply arrives via onData', async () => {
