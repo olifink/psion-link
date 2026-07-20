@@ -35,3 +35,7 @@ export { parseVolumeReply } from './volume';
 export type { VolumeInfo } from './volume';
 export { RfsvClient, RfsvError, RfsvDirHandle } from './client';
 export type { DriveListEntry } from './client';
+export { driveRootPath, isDriveRoot, joinEpocPath, listPattern, parentPath, pathSegments } from './path';
+export type { PathSegment } from './path';
+export { downloadFile, uploadFile } from './transfer';
+export type { TransferOptions, TransferProgress } from './transfer';

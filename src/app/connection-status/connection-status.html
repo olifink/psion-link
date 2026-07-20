@@ -1,0 +1,41 @@
+@if (!psionLink.isSupported) {
+  <span class="status status--warn">
+    <mat-icon>warning</mat-icon>
+    Web Serial isn't available in this browser — use Chrome or ChromeOS.
+  </span>
+} @else {
+  @switch (psionLink.connectionState()) {
+    @case ('disconnected') {
+      <span class="status">
+        @if (psionLink.lastError(); as error) {
+          <span class="status__error" [matTooltip]="error">{{ error }}</span>
+        }
+        <button matButton="filled" (click)="connect()">
+          <mat-icon>cable</mat-icon>
+          Connect
+        </button>
+      </span>
+    }
+    @case ('connecting') {
+      <span class="status">
+        <mat-progress-spinner diameter="18" mode="indeterminate" />
+        Connecting…
+      </span>
+    }
+    @case ('connected') {
+      <span class="status status--connected">
+        <mat-icon>check_circle</mat-icon>
+        <span class="status__detail">
+          Connected
+          @if (psionLink.negotiatedBaudRate(); as baud) {
+            · {{ baud }} baud
+          }
+          @if (psionLink.peer(); as peer) {
+            · ROM {{ peer.version }} · id {{ peer.id }}
+          }
+        </span>
+        <button matButton (click)="disconnect()">Disconnect</button>
+      </span>
+    }
+  }
+}

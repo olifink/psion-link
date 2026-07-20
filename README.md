@@ -78,8 +78,22 @@ for the binding architecture decisions.
       the Chrome-only gate. Tested against the same fake-Psion-peer pattern
       as `connection.test.ts`, via `ng test`/Vitest rather than `bun test`
       since it's Angular-aware.
-- [ ] File browser UI (breadcrumbs, drag-and-drop upload, per-file progress)
-- [ ] Connection-status indicator
+- [x] `ConnectionStatus` (`connection-status/`): the quiet persistent
+      indicator CLAUDE.md's UI sensibility asks for — Connect button when
+      disconnected, spinner while negotiating, baud rate + NCP peer
+      version/id once connected, last failure reason inline. No modal.
+- [x] `FileBrowser` (`file-browser/`): single-pane listing with a drive
+      switcher, breadcrumb path, up/refresh/new-folder/upload toolbar
+      actions, drag-and-drop upload, and a per-file determinate-progress
+      panel (cancellable via `AbortSignal`) for both directions. Rename/
+      delete go through small `MatDialog` prompts
+      (`text-prompt-dialog.ts`/`confirm-dialog.ts`). Downloads save via a
+      Blob/object-URL anchor click — no File System Access API dependency.
+      Talks straight to `PsionLinkService.rfsv()`; no new state lives in
+      `PsionLinkService` itself.
+      Chunked transfer + EPOC path-syntax helpers
+      (`rfsv/transfer.ts`, `rfsv/path.ts`) are framework-free and
+      `bun test`-covered, same as the rest of the protocol core.
 
 ## Tooling
 

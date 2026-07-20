@@ -1,0 +1,151 @@
+@if (!psionLink.isConnected()) {
+  <div class="empty-state">
+    <mat-icon>usb</mat-icon>
+    <p>Connect a Psion to browse its files.</p>
+  </div>
+} @else {
+  <div class="toolbar">
+    <button matButton [matMenuTriggerFor]="driveMenu" [disabled]="presentDrives().length === 0">
+      <mat-icon>sd_card</mat-icon>
+      {{ currentDrive() ?? '—' }}
+    </button>
+    <mat-menu #driveMenu="matMenu">
+      @for (drive of presentDrives(); track drive.letter) {
+        <button mat-menu-item (click)="selectDrive(drive.letter)">{{ drive.letter }}</button>
+      }
+    </mat-menu>
+
+    <nav class="breadcrumbs" aria-label="Path">
+      @for (segment of breadcrumbs(); track segment.path; let last = $last) {
+        <button
+          matButton
+          class="breadcrumbs__segment"
+          [disabled]="last"
+          (click)="navigateTo(segment.path)"
+        >
+          {{ segment.label }}
+        </button>
+        @if (!last) {
+          <mat-icon class="breadcrumbs__sep">chevron_right</mat-icon>
+        }
+      }
+    </nav>
+
+    <span class="toolbar__spacer"></span>
+
+    <button matIconButton (click)="goUp()" [disabled]="!canGoUp()" matTooltip="Up one level" aria-label="Up one level">
+      <mat-icon>arrow_upward</mat-icon>
+    </button>
+    <button matIconButton (click)="refresh()" matTooltip="Refresh" aria-label="Refresh">
+      <mat-icon>refresh</mat-icon>
+    </button>
+    <button matIconButton (click)="newFolder()" matTooltip="New folder" aria-label="New folder">
+      <mat-icon>create_new_folder</mat-icon>
+    </button>
+    <button matButton (click)="fileInput.click()">
+      <mat-icon>upload</mat-icon>
+      Upload
+    </button>
+    <input #fileInput type="file" multiple hidden (change)="onFileInputChange($event)" />
+  </div>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (errorMessage(); as error) {
+    <div class="banner banner--error">
+      <mat-icon>error</mat-icon>
+      {{ error }}
+    </div>
+  }
+
+  <div
+    class="listing"
+    [class.listing--drag-active]="dragActive()"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave()"
+    (drop)="onDrop($event)"
+  >
+    @if (dragActive()) {
+      <div class="drop-overlay">
+        <mat-icon>cloud_upload</mat-icon>
+        Drop to upload to {{ currentPath() }}
+      </div>
+    }
+
+    @if (!loading() && entries().length === 0) {
+      <p class="listing__empty">This folder is empty.</p>
+    }
+
+    <table class="entries">
+      <tbody>
+        @for (entry of entries(); track entry.name) {
+          <tr class="entries__row">
+            <td class="entries__icon">
+              <mat-icon>{{ entry.isDirectory ? 'folder' : 'insert_drive_file' }}</mat-icon>
+            </td>
+            <td class="entries__name">
+              <button matButton class="entries__name-button" (click)="open(entry)">{{ entry.name }}</button>
+            </td>
+            <td class="entries__size">{{ entry.isDirectory ? '' : formatBytes(entry.sizeBytes) }}</td>
+            <td class="entries__modified">{{ formatDateTime(entry.modified) }}</td>
+            <td class="entries__actions">
+              <button matIconButton [matMenuTriggerFor]="rowMenu" matTooltip="More actions" aria-label="More actions">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #rowMenu="matMenu">
+                @if (!entry.isDirectory) {
+                  <button mat-menu-item (click)="open(entry)">
+                    <mat-icon>download</mat-icon>
+                    Download
+                  </button>
+                }
+                <button mat-menu-item (click)="rename(entry)">
+                  <mat-icon>edit</mat-icon>
+                  Rename
+                </button>
+                <button mat-menu-item (click)="deleteEntry(entry)">
+                  <mat-icon>delete</mat-icon>
+                  Delete
+                </button>
+              </mat-menu>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  @if (transfers().length > 0) {
+    <div class="transfers">
+      @for (transfer of transfers(); track transfer.id) {
+        <div class="transfer" [class.transfer--error]="transfer.status === 'error'">
+          <mat-icon>{{ transfer.direction === 'download' ? 'download' : 'upload' }}</mat-icon>
+          <div class="transfer__body">
+            <div class="transfer__name">{{ transfer.name }}</div>
+            @if (transfer.status === 'active') {
+              <mat-progress-bar
+                mode="determinate"
+                [value]="transfer.totalBytes > 0 ? (100 * transfer.bytesTransferred) / transfer.totalBytes : 0"
+              />
+            } @else if (transfer.status === 'error') {
+              <div class="transfer__error">{{ transfer.error }}</div>
+            } @else {
+              <div class="transfer__done">Done — {{ formatBytes(transfer.bytesTransferred) }}</div>
+            }
+          </div>
+          @if (transfer.status === 'active') {
+            <button matIconButton (click)="cancelTransfer(transfer)" matTooltip="Cancel" aria-label="Cancel transfer">
+              <mat-icon>close</mat-icon>
+            </button>
+          } @else {
+            <button matIconButton (click)="dismissTransfer(transfer)" matTooltip="Dismiss" aria-label="Dismiss">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+}
