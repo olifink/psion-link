@@ -6,5 +6,5 @@
     "types": ["w3c-web-serial"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/protocol/**/*.test.ts"]
+  "exclude": ["src/**/*.spec.ts", "src/protocol/**/*.test.ts", "src/convert/**/*.test.ts"]
 }

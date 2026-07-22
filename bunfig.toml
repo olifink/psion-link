@@ -1,5 +1,9 @@
-# `bun test` targets the framework-free protocol core only; Angular specs
-# (*.spec.ts) run under `ng test` / vitest, which needs TestBed/zone.js
-# that bun:test doesn't provide. See CLAUDE.md "Architecture".
+# `bun test` targets the framework-free code (protocol core + convert):
+# Angular specs (*.spec.ts) run under `ng test` / vitest, which needs
+# TestBed/zone.js that bun:test doesn't provide. Bun's default test
+# matcher picks up *.spec.ts as well as *.test.ts, so src/app has to be
+# excluded explicitly rather than relying on the naming convention alone.
+# See CLAUDE.md "Architecture".
 [test]
-root = "./src/protocol"
+root = "./src"
+pathIgnorePatterns = ["src/app/**"]

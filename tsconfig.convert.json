@@ -1,0 +1,10 @@
+/* Type-checking scope for the framework-free file-conversion module
+   (src/convert), including its bun:test specs. Not part of the Angular
+   build — see tsconfig.app.json for that. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"]
+  },
+  "include": ["src/convert/**/*.ts"]
+}
