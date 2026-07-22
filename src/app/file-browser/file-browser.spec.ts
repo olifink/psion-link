@@ -1,9 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { EpocStatus, RfsvReason } from '../../protocol';
+import { EpocStatus, RfsvDirEntry, RfsvReason } from '../../protocol';
 import { PsionLinkService } from '../core/psion-link.service';
+import { SettingsService } from '../core/settings.service';
 import { FakePsionPeer, FakeSerialPort, stubSerial, unstubSerial } from '../testing/fake-psion-peer';
 import { FileBrowser } from './file-browser';
+
+function fakeEntry(overrides: Partial<RfsvDirEntry> = {}): RfsvDirEntry {
+  return {
+    name: 'FILE',
+    isDirectory: false,
+    sizeBytes: 0,
+    modified: new Date(),
+    attributes: 0,
+    ...overrides,
+  };
+}
 
 function u32le(value: number): number[] {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
@@ -92,5 +104,45 @@ describe('FileBrowser', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('C:');
     expect(text).toContain('This folder is empty.');
+  });
+
+  describe('canTransfer / downloadTooltip', () => {
+    it('always allows directories and files, and shows no tooltip, while conversion is off', () => {
+      const fixture = TestBed.createComponent(FileBrowser);
+      TestBed.inject(SettingsService).setConvertOnTransfer(false);
+      const file = fakeEntry({ uid: [0, 0, 0x1000007f] }); // Word
+      const dir = fakeEntry({ isDirectory: true });
+
+      expect(fixture.componentInstance.canTransfer(file)).toBe(true);
+      expect(fixture.componentInstance.canTransfer(dir)).toBe(true);
+      expect(fixture.componentInstance.downloadTooltip(file)).toBe('');
+    });
+
+    it('allows a convertible file and names its target format, while conversion is on', () => {
+      const fixture = TestBed.createComponent(FileBrowser);
+      TestBed.inject(SettingsService).setConvertOnTransfer(true);
+      const word = fakeEntry({ uid: [0, 0, 0x1000007f] });
+
+      expect(fixture.componentInstance.canTransfer(word)).toBe(true);
+      expect(fixture.componentInstance.downloadTooltip(word)).toBe('Converts to .md on download');
+    });
+
+    it('disables a file with no converter and explains why, while conversion is on', () => {
+      const fixture = TestBed.createComponent(FileBrowser);
+      TestBed.inject(SettingsService).setConvertOnTransfer(true);
+      const unsupported = fakeEntry({ uid: [0, 0, 0x10000083] }); // Calc — no converter
+
+      expect(fixture.componentInstance.canTransfer(unsupported)).toBe(false);
+      expect(fixture.componentInstance.downloadTooltip(unsupported)).toContain('No conversion available');
+    });
+
+    it('still allows directories while conversion is on', () => {
+      const fixture = TestBed.createComponent(FileBrowser);
+      TestBed.inject(SettingsService).setConvertOnTransfer(true);
+      const dir = fakeEntry({ isDirectory: true });
+
+      expect(fixture.componentInstance.canTransfer(dir)).toBe(true);
+      expect(fixture.componentInstance.downloadTooltip(dir)).toBe('');
+    });
   });
 });

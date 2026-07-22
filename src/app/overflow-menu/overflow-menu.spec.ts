@@ -21,7 +21,7 @@ describe('OverflowMenu', () => {
     const fixture = TestBed.createComponent(OverflowMenu);
     fixture.detectChanges();
     const settings = TestBed.inject(SettingsService);
-    expect(settings.convertOnTransfer()).toBe(false);
+    expect(settings.convertOnTransfer()).toBe(true);
 
     const button = (fixture.nativeElement as HTMLElement).querySelector('button[matIconButton]') as HTMLElement;
     button.click();
@@ -31,6 +31,6 @@ describe('OverflowMenu', () => {
     menuItem.click();
     fixture.detectChanges();
 
-    expect(settings.convertOnTransfer()).toBe(true);
+    expect(settings.convertOnTransfer()).toBe(false);
   });
 });

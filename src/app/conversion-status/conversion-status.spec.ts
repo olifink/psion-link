@@ -12,18 +12,18 @@ describe('ConversionStatus', () => {
     unstubLocalStorage();
   });
 
-  it('shows off by default', () => {
+  it('shows on by default', () => {
     const fixture = TestBed.createComponent(ConversionStatus);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('off');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('on');
   });
 
-  it('reflects the setting once turned on', () => {
-    TestBed.inject(SettingsService).setConvertOnTransfer(true);
+  it('reflects the setting once turned off', () => {
+    TestBed.inject(SettingsService).setConvertOnTransfer(false);
 
     const fixture = TestBed.createComponent(ConversionStatus);
     fixture.detectChanges();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('on');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('off');
   });
 });

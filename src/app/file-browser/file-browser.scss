@@ -147,6 +147,18 @@
   }
 }
 
+.entries__name-button--disabled {
+  color: var(--mat-sys-on-surface-variant);
+  cursor: default;
+  opacity: 0.6;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--mat-sys-on-surface-variant);
+    text-decoration: none;
+  }
+}
+
 .entries__size,
 .entries__modified {
   white-space: nowrap;

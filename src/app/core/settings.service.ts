@@ -4,12 +4,13 @@ const CONVERT_ON_TRANSFER_KEY = 'psion-link.convertOnTransfer';
 
 /**
  * Standing user preferences, persisted to `localStorage`. Currently just
- * the "convert files on transfer" toggle (SPECSv3.md §6) — off by default,
- * per SPECSv3.md §10: byte-identical transfers unless explicitly opted in.
+ * the "convert files on transfer" toggle (SPECSv3.md §6) — on by default;
+ * revised from SPECSv3.md §10's original "off by default" once the
+ * feature proved useful enough in practice to want on unprompted.
  */
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
-  private readonly _convertOnTransfer = signal(readStoredBoolean(CONVERT_ON_TRANSFER_KEY, false));
+  private readonly _convertOnTransfer = signal(readStoredBoolean(CONVERT_ON_TRANSFER_KEY, true));
   readonly convertOnTransfer = this._convertOnTransfer.asReadonly();
 
   setConvertOnTransfer(value: boolean): void {

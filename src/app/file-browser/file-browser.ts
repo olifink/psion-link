@@ -124,7 +124,12 @@ const DOWNLOAD_CONVERSIONS: Record<number, DownloadConversion> = {
 
 function saveBlobAsFile(data: Uint8Array, name: string): void {
   // `data` may be typed `Uint8Array<ArrayBufferLike>`; Blob wants a concrete `ArrayBuffer`-backed view.
-  const blob = new Blob([new Uint8Array(data)]);
+  // An explicit MIME type matters even though nothing here reads it: an
+  // untyped Blob downloaded through an extension-less filename (the norm
+  // here — device files carry no extension, SPECSv3.md §10) gets a
+  // spurious ".txt" appended by Chrome's save dialog, which otherwise
+  // guesses a text-file default for content with no declared type.
+  const blob = new Blob([new Uint8Array(data)], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -239,9 +244,32 @@ export class FileBrowser {
     }
     if (entry.isDirectory) {
       void this.navigateTo(joinEpocPath(path, entry.name));
-    } else {
+    } else if (this.canTransfer(entry)) {
       void this.startDownload(entry);
     }
+  }
+
+  /**
+   * Whether `entry` can be downloaded right now — always true unless
+   * "convert on transfer" is on and this file type has no converter.
+   * Public (unlike the action methods below, which are template-only):
+   * it's a pure query with no side effects, and directly unit-testable
+   * that way rather than through a full connected-device DOM fixture.
+   */
+  canTransfer(entry: RfsvDirEntry): boolean {
+    if (entry.isDirectory || !this.settings.convertOnTransfer()) {
+      return true;
+    }
+    return entry.uid !== undefined && entry.uid[2] in DOWNLOAD_CONVERSIONS;
+  }
+
+  /** Explains what downloading `entry` will do while "convert on transfer" is on; empty when there's nothing worth saying (toggle off, or a directory). */
+  downloadTooltip(entry: RfsvDirEntry): string {
+    if (entry.isDirectory || !this.settings.convertOnTransfer()) {
+      return '';
+    }
+    const conversion = entry.uid ? DOWNLOAD_CONVERSIONS[entry.uid[2]] : undefined;
+    return conversion ? `Converts to .${conversion.extension} on download` : 'No conversion available for this file type — download disabled while conversion is on';
   }
 
   protected goUp(): void {

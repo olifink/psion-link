@@ -95,13 +95,16 @@ for the binding architecture decisions.
       (`rfsv/transfer.ts`, `rfsv/path.ts`) are framework-free and
       `bun test`-covered, same as the rest of the protocol core.
 
-- [x] File-type conversion (`convert/`, SPECSv3.md): an off-by-default
+- [x] File-type conversion (`convert/`, SPECSv3.md): an on-by-default
       "Convert files on transfer" toggle (`OverflowMenu`, persisted via
       `SettingsService`) that, on download, converts recognized Psion
       formats to modern equivalents before saving — Word → Markdown
       (text only), Sketch → PNG, Record (voice memo) → WAV — falling back
-      to the raw file with an inline notice if conversion fails. Upload
-      direction isn't wired up yet: Markdown → Word doesn't exist. The
+      to the raw file with an inline notice if conversion fails. Files
+      with no converter show a tooltip explaining why and are disabled
+      for download while the toggle is on, rather than silently
+      downloading unconverted. Upload direction isn't wired up yet:
+      Markdown → Word doesn't exist. The
       three format decoders (`convert/word.ts`, `convert/sketch.ts`,
       `convert/record.ts`) plus a from-scratch PNG encoder
       (`convert/png.ts`, using the Web Compression Streams API so it

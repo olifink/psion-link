@@ -213,9 +213,10 @@ useful v3 MVP for this format.
 
 - The overflow menu SPECSv2 introduced next to `ConnectButton`
   (`src/app/connection-status/connect-button.html`) gets a second item: a
-  toggle, "Convert files on transfer," **off by default** (§10).
-  Persisted (e.g. `localStorage`) as a standing preference, not a one-off
-  action.
+  toggle, "Convert files on transfer" (§10 — **on by default**, revised
+  from this doc's original "off" once the feature shipped and proved
+  useful enough to want on unprompted). Persisted (e.g. `localStorage`)
+  as a standing preference, not a one-off action.
 - Angular Material detail worth flagging now rather than discovering it
   mid-build: a toggle control inside a `mat-menu-item` needs
   `(click)="$event.stopPropagation()"` on the toggle itself, or clicking it
@@ -278,10 +279,15 @@ useful v3 MVP for this format.
 
 ## 10. Open questions — resolved
 
-1. **Default toggle state: off**, confirmed. Additionally: while on, the
-   upload side should only accept supported source formats and grey out/
-   disable anything else, rather than silently uploading unconverted files
-   under a misleading "conversion is on" state — folded into §7.
+1. **Default toggle state: off**, confirmed at the time — **later revised
+   to on by default**, once the shipped feature (download-direction
+   conversion, disabled/tooltip'd UI for unsupported types) proved useful
+   enough in daily use to want it active without opting in each time.
+   Additionally: while on, the upload side should only accept supported
+   source formats and grey out/disable anything else, rather than
+   silently uploading unconverted files under a misleading "conversion is
+   on" state — folded into §7 (still not implemented — no upload-side
+   converter exists yet).
 2. **Filename/extension convention: device files carry no extension at
    all** — UID is the sole type identifier, confirmed. So: append the
    appropriate extension (`.md`/`.png`/`.wav`) locally on download, and
