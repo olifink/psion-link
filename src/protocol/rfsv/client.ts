@@ -1,5 +1,5 @@
 import { NcpChannel } from '../ncp';
-import { ATTR_GET_UID, EpocStatus, RfsvReason } from './constants';
+import { ATTR_GET_UID, EpocStatus, FileAttribute, RfsvReason } from './constants';
 import { decodeRfsvReply, encodeRfsvCommand, rfsvBytes } from './frame';
 import { RfsvDirEntry, parseReadDirEntries } from './readdir';
 import { encodeEpocString } from './strings';
@@ -56,8 +56,18 @@ export class RfsvClient {
     return parseVolumeReply(data);
   }
 
+  /**
+   * `RFSV32_OPEN_DIR`'s attribute DWORD is a filter mask, not merely a
+   * "fetch UIDs too" flag: an entry is only returned if it matches one of
+   * the requested `FileAttribute` categories. plptools' own `dir()`
+   * (`RFSV32::dir`, lib/rfsv32.cc) always requests
+   * `PSI_A_HIDDEN | PSI_A_SYSTEM | PSI_A_DIR` — without the `Directory`
+   * bit, the device silently omits every subdirectory from the listing.
+   */
+  private static readonly DEFAULT_LIST_ATTRIBUTES = FileAttribute.Hidden | FileAttribute.System | FileAttribute.Directory;
+
   async openDir(pattern: string, options: { attributes?: number } = {}): Promise<RfsvDirHandle> {
-    const attr = (options.attributes ?? 0) | ATTR_GET_UID;
+    const attr = (options.attributes ?? RfsvClient.DEFAULT_LIST_ATTRIBUTES) | ATTR_GET_UID;
     const data = rfsvBytes.concatBytes(rfsvBytes.encodeU32le(attr), encodeEpocString(pattern));
     const reply = await this.call(RfsvReason.OpenDir, data);
     return new RfsvDirHandle(this, rfsvBytes.u32le(reply, 0));
@@ -107,8 +117,10 @@ export class RfsvClient {
     await this.call(RfsvReason.Rename, data);
   }
 
+  /** `RFSV32_MKDIR_ALL` requires a trailing separator (plptools' `RFSV32::mkdir` enforces this too). */
   async mkDirAll(name: string): Promise<void> {
-    await this.call(RfsvReason.MkDirAll, encodeEpocString(name));
+    const path = name.endsWith('\\') ? name : `${name}\\`;
+    await this.call(RfsvReason.MkDirAll, encodeEpocString(path));
   }
 
   async rmDir(name: string): Promise<void> {

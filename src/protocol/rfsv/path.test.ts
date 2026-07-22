@@ -6,9 +6,9 @@ describe('driveRootPath / listPattern / joinEpocPath', () => {
     expect(driveRootPath('C:')).toBe('C:\\');
   });
 
-  test('listPattern wildcards a directory (already-separated or not)', () => {
-    expect(listPattern('C:\\')).toBe('C:\\*.*');
-    expect(listPattern('C:\\DOCS')).toBe('C:\\DOCS\\*.*');
+  test('listPattern is the bare directory path with a trailing separator, no wildcard', () => {
+    expect(listPattern('C:\\')).toBe('C:\\');
+    expect(listPattern('C:\\DOCS')).toBe('C:\\DOCS\\');
   });
 
   test('joinEpocPath appends a leaf name', () => {

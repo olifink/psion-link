@@ -232,6 +232,22 @@ describe('RfsvClient file operations', () => {
     channel.deliver(encodeReply(channel.lastOpId(), EpocStatus.None));
     await expect(pending).resolves.toBeUndefined();
   });
+
+  test('mkDirAll appends a trailing separator when the caller omits one', async () => {
+    const { channel, client } = createHarness();
+    const pending = client.mkDirAll('C:\\NEWDIR');
+    expect(Array.from(channel.sent[0]!.subarray(4))).toEqual(encodeString('C:\\NEWDIR\\'));
+    channel.deliver(encodeReply(channel.lastOpId(), EpocStatus.None));
+    await expect(pending).resolves.toBeUndefined();
+  });
+
+  test('mkDirAll leaves an already-trailing separator alone', async () => {
+    const { channel, client } = createHarness();
+    const pending = client.mkDirAll('C:\\NEWDIR\\');
+    expect(Array.from(channel.sent[0]!.subarray(4))).toEqual(encodeString('C:\\NEWDIR\\'));
+    channel.deliver(encodeReply(channel.lastOpId(), EpocStatus.None));
+    await expect(pending).resolves.toBeUndefined();
+  });
 });
 
 describe('RfsvClient directory listing', () => {
@@ -247,6 +263,17 @@ describe('RfsvClient directory listing', () => {
     channel.deliver(encodeReply(channel.lastOpId(), EpocStatus.None, u32le(0x77)));
     const handle = await pending;
     expect(handle.handle).toBe(0x77);
+  });
+
+  test('openDir defaults to requesting hidden/system/directory entries so subdirectories are returned', async () => {
+    const { channel, client } = createHarness();
+    client.openDir('C:\\');
+
+    const attrBytes = channel.sent[0]!.subarray(4, 8);
+    const attr = attrBytes[0]! | (attrBytes[1]! << 8) | (attrBytes[2]! << 16) | (attrBytes[3]! << 24);
+    expect(attr & (FileAttribute.Hidden | FileAttribute.System | FileAttribute.Directory)).toBe(
+      FileAttribute.Hidden | FileAttribute.System | FileAttribute.Directory,
+    );
   });
 
   test('listDir opens, drains all batched entries across multiple READ_DIR calls, then closes', async () => {

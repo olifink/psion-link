@@ -1,9 +1,8 @@
 /**
  * EPOC path syntax helpers: drive letter + backslash-separated components
- * (e.g. `C:\DOCS\LETTER.TXT`), matching what `RFSV32_OPEN_DIR`'s pattern
- * argument and every other RFSV32 path argument expect (confirmed against
- * this project's own `client.test.ts` fixtures, e.g. `'C:\\*.*'` to list a
- * drive's root). Pure path-string manipulation — no wire I/O.
+ * (e.g. `C:\DOCS\LETTER.TXT`), matching what `RFSV32_OPEN_DIR`'s path
+ * argument and every other RFSV32 path argument expect. Pure path-string
+ * manipulation — no wire I/O.
  */
 
 function withTrailingSeparator(path: string): string {
@@ -15,9 +14,17 @@ export function driveRootPath(letter: string): string {
   return withTrailingSeparator(letter);
 }
 
-/** `RFSV32_OPEN_DIR`'s wildcard pattern for listing everything directly under `dirPath`. */
+/**
+ * `RFSV32_OPEN_DIR`'s argument for listing everything directly under
+ * `dirPath`: the bare directory path with a trailing separator, no
+ * wildcard. plptools' own `dir` command (`plpftp/ftp.cc`) does exactly
+ * this — no `*.*` is ever appended. Appending one (as this used to do) is
+ * a DOS-ism that real EPOC devices take literally: it excludes any entry
+ * without a `.` in its name, which on Psion is most directories, so they
+ * silently vanished from listings while files kept showing up fine.
+ */
 export function listPattern(dirPath: string): string {
-  return `${withTrailingSeparator(dirPath)}*.*`;
+  return withTrailingSeparator(dirPath);
 }
 
 /** Appends a leaf `name` (no separators of its own) onto a directory path. */
