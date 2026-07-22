@@ -3,7 +3,7 @@ import { PduType } from './constants';
 import { decodeContSeq, encodeContSeq } from './cont-seq';
 import { encodeFrame, FrameDecoder } from './framing';
 import { Clock } from './clock';
-import { CONNECT_RETRIES, DATA_RETRIES, INACTIVITY_TIMEOUT_MS, MAX_OUTSTANDING, retransmitTimeoutMs } from './timing';
+import { CONNECT_RETRIES, DATA_RETRIES, MAX_OUTSTANDING, retransmitTimeoutMs } from './timing';
 import { ConnectionState, LinkConnection } from './connection';
 
 class FakeClock implements Clock {
@@ -282,26 +282,27 @@ describe('LinkConnection disconnect + robustness', () => {
     expect(h.failures).toEqual(['peer disconnected']);
   });
 
-  test('inactivity timeout disconnects after 60s of silence with an empty queue', () => {
+  test('stays connected indefinitely with an empty queue and no traffic (no self-inflicted idle disconnect)', () => {
     const h = createHarness();
     connectHarness(h);
     h.framesOut.length = 0;
 
-    h.clock.advance(INACTIVITY_TIMEOUT_MS + 10);
+    // plptools' Link class has no idle/keep-alive disconnect at all — an
+    // empty ackWaitQueue should never trigger a timeout, however long it's
+    // been since the last frame. See timing.ts for why.
+    h.clock.advance(10 * 60_000);
 
-    expect(decodeEmitted(h.framesOut[0]!).pduType).toBe(PduType.Disc);
-    expect(h.connection.getState()).toBe('idle');
-    expect(h.failures).toEqual(['inactivity timeout']);
+    expect(h.connection.getState()).toBe('connected');
+    expect(h.framesOut).toEqual([]);
+    expect(h.failures).toEqual([]);
   });
 
-  test('a pending data ack retransmits on its own schedule rather than the inactivity timer firing', () => {
+  test('a pending data ack retransmits on its own schedule', () => {
     const h = createHarness();
     connectHarness(h);
     h.connection.send(Uint8Array.of(0x01));
     h.framesOut.length = 0;
 
-    // Just past one retransmit interval — nowhere near the 60s inactivity
-    // mark — should resend the outstanding Data_Pdu, not disconnect.
     h.clock.advance(T + 10);
 
     expect(h.connection.getState()).toBe('connected');

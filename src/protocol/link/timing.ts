@@ -15,8 +15,18 @@ export function retransmitTimeoutMs(baudRate: number): number {
   return (13200 / baudRate + 0.2) * 1000;
 }
 
-/** PLP spec §"Timers": "a timeout of 60 seconds is recommended". */
-export const INACTIVITY_TIMEOUT_MS = 60_000;
+/**
+ * The spec's sample state table also has Data_State's "Timeout" event
+ * (i.e. 60s with nothing outstanding) send Disc_Pdu and terminate the
+ * connection — deliberately not implemented here. plptools' `Link` class
+ * (`lib/link.cc`) has no such mechanism at all: no keep-alive, no idle
+ * timer, no self-initiated disconnect. Implementing the spec's version
+ * against real hardware meant we tore down a perfectly healthy connection
+ * out from under the user every time they spent over a minute just
+ * looking at a directory listing. A genuinely dead link is still caught
+ * by the per-packet retransmit-limit path in `checkTimeouts` the next
+ * time something is actually sent.
+ */
 
 /** PLP spec, Idle_Ack_State: retry the connection handshake up to 4 times. */
 export const CONNECT_RETRIES = 4;

@@ -2,7 +2,7 @@ import { PduType } from './constants';
 import { ContSeqHeader, decodeContSeq, encodeContSeq } from './cont-seq';
 import { DecodedFrame, FrameDecoder, encodeFrame } from './framing';
 import { Clock, SYSTEM_CLOCK } from './clock';
-import { CONNECT_RETRIES, DATA_RETRIES, INACTIVITY_TIMEOUT_MS, MAX_OUTSTANDING, MAX_PAYLOAD_BYTES, retransmitTimeoutMs } from './timing';
+import { CONNECT_RETRIES, DATA_RETRIES, MAX_OUTSTANDING, MAX_PAYLOAD_BYTES, retransmitTimeoutMs } from './timing';
 
 /** EPOC variant: mod-2048 sequencing (BRIEF.md §4.2). */
 const SEQ_MASK = 0x7ff;
@@ -21,9 +21,10 @@ const SEQ_MASK = 0x7ff;
  *    multi-windowed (up to 8 outstanding Data_Pdus, not the spec sample's
  *    single-window simplification), so "awaiting an ack" isn't a single
  *    connection-wide state — it's tracked per packet in `ackWaitQueue`.
- *    `checkTimeouts` reproduces the spec's Data_State vs. Data_Ack_State
- *    Timeout-event split (inactivity vs. per-packet retransmit) based on
- *    whether that queue is empty.
+ *    `checkTimeouts` only ever fires the per-packet retransmit path (when
+ *    that queue is non-empty); see `timing.ts` for why the spec's other
+ *    Data_State Timeout transition — self-disconnect after 60s idle — is
+ *    deliberately not implemented.
  */
 export type ConnectionState = 'idle' | 'idleReq' | 'connected';
 
@@ -51,7 +52,7 @@ interface PendingPacket {
 /**
  * The PLP data link layer's ARQ + connection state machine: owns framing
  * (via FrameDecoder/encodeFrame), the Cont/Seq handshake, the sliding
- * send window, and retransmission/inactivity timeouts. Transport-agnostic
+ * send window, and per-packet retransmission timeouts. Transport-agnostic
  * — feed it raw serial bytes via `receiveBytes`, and write whatever it
  * hands to `onFrameReady` back out to the wire; it has no dependency on
  * WebSerialTransport.
@@ -65,7 +66,6 @@ export class LinkConnection {
   private rxSeq = -1;
   private connectRetriesRemaining = CONNECT_RETRIES;
   private idleReqDeadline = 0;
-  private lastActivityAt = 0;
   private timerHandle: unknown = null;
 
   private ackWaitQueue: PendingPacket[] = [];
@@ -169,7 +169,6 @@ export class LinkConnection {
       this.connectRetriesRemaining = CONNECT_RETRIES;
       this.setState('connected');
       this.sendAck(0);
-      this.noteActivity();
       this.rescheduleTimer();
       return;
     }
@@ -196,8 +195,6 @@ export class LinkConnection {
     if (seq === expected) {
       this.rxSeq = expected;
       this.sendAck(this.rxSeq);
-      this.noteActivity();
-      this.rescheduleTimer();
       this.options.onDataReceived(payload);
     } else {
       // Duplicate or out-of-order: re-ack the last known-good seq (spec:
@@ -225,7 +222,6 @@ export class LinkConnection {
     // no need for plptools' timestamp comparison, which breaks down for
     // packets sent within the same clock tick.
     this.ackWaitQueue.splice(0, index + 1);
-    this.noteActivity();
     this.pumpSendBacklog();
     this.rescheduleTimer();
   }
@@ -272,32 +268,24 @@ export class LinkConnection {
     }
 
     if (this.state === 'connected') {
+      // Nothing outstanding means nothing to retransmit; see timing.ts for
+      // why an empty queue deliberately never times out on its own.
       const oldest = this.ackWaitQueue[0];
-      if (oldest) {
-        if (now < oldest.deadline) {
-          return;
-        }
-        if (oldest.retriesRemaining > 0) {
-          oldest.retriesRemaining--;
-          oldest.deadline = now + retransmitTimeoutMs(this.options.baudRate);
-          this.emitFrame(oldest.frame);
-        } else {
-          this.sendDisc();
-          this.fail('data retransmit limit exceeded');
-        }
+      if (!oldest) {
         return;
       }
-      const inactivityDeadline = this.lastActivityAt + INACTIVITY_TIMEOUT_MS;
-      if (now < inactivityDeadline) {
+      if (now < oldest.deadline) {
         return;
       }
-      this.sendDisc();
-      this.fail('inactivity timeout');
+      if (oldest.retriesRemaining > 0) {
+        oldest.retriesRemaining--;
+        oldest.deadline = now + retransmitTimeoutMs(this.options.baudRate);
+        this.emitFrame(oldest.frame);
+      } else {
+        this.sendDisc();
+        this.fail('data retransmit limit exceeded');
+      }
     }
-  }
-
-  private noteActivity(): void {
-    this.lastActivityAt = this.clock.now();
   }
 
   private sendReqReq(): void {
@@ -352,11 +340,8 @@ export class LinkConnection {
     let deadline: number | null = null;
     if (this.state === 'idleReq') {
       deadline = this.idleReqDeadline;
-    } else if (this.state === 'connected') {
-      deadline =
-        this.ackWaitQueue.length > 0
-          ? this.ackWaitQueue[0]!.deadline
-          : this.lastActivityAt + INACTIVITY_TIMEOUT_MS;
+    } else if (this.state === 'connected' && this.ackWaitQueue.length > 0) {
+      deadline = this.ackWaitQueue[0]!.deadline;
     }
     if (deadline === null) {
       return;
