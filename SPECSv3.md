@@ -135,6 +135,19 @@ what validates the layer-parsing research above. Write-direction (Markdown
 scratch — real but self-contained work, sequenced as phase two of v3, not
 deferred to a later spec.
 
+**Update**: a plain-text (not yet Markdown-syntax-aware) write direction
+now exists — `word.ts`'s `textToWord()` — confirmed opening correctly on a
+real Series 5. It sidesteps needing the Word Status/Styles/Page Layout
+section formats reverse-engineered from scratch: it copies them verbatim
+from a real template Word file (one actually created by the on-device Word
+app — an old pre-installed document turned out to have a much sparser
+Word Styles Section and crashed the app) and only replaces the Text
+Section, patching one documented Word Status field (the saved cursor
+offset, psiconv's `Word_Status_Section` doc) that would otherwise point
+at an invalid position once the Text Section's content changes underneath
+it. Actual Markdown syntax parsing (`#`/`**`/lists → paragraph/character
+layers) is still not attempted.
+
 Markdown constructs with no Word equivalent (tables, code fences, images —
 mostly moot anyway since this is text-only per the ask) should flatten to
 plain text or fail with a clear error on upload, not silently mangle.

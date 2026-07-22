@@ -1,10 +1,14 @@
-import { EpocDocHeader, hex32, parseEpocDocHeader } from './epoc-doc';
+import { EpocDocHeader, hex32, parseEpocDocHeader, sectionBytes } from './epoc-doc';
 
 /** Psion's built-in "Word" app's UID3 — matches `KNOWN_APP_UIDS['Word']` in file-browser.ts, sourced from real hardware. */
 const WORD_APP_UID3 = 0x1000007f;
 
-/** The Text Section's identifier within the Section Table (psiconv: `06 01 00 10`), confirmed against a real Word file. */
+/** Section IDs within the Section Table (psiconv's Section_Table_Section doc), confirmed against a real Word file. */
 const TEXT_SECTION_ID = 0x10000106;
+const WORD_STATUS_SECTION_ID = 0x10000243;
+const WORD_STYLES_SECTION_ID = 0x10000104;
+const PAGE_LAYOUT_SECTION_ID = 0x10000105;
+const APPLICATION_ID_SECTION_ID = 0x10000089;
 
 function findTextSection(header: EpocDocHeader): number {
   if (header.uid3 !== WORD_APP_UID3) {
@@ -144,4 +148,174 @@ export function wordToMarkdown(data: Uint8Array): string {
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
     .join('\n\n');
+}
+
+/**
+ * Windows-1252 has no built-in JS encoder (only `TextDecoder` supports
+ * legacy single-byte encodings; `TextEncoder` is UTF-8 only). Built by
+ * decoding every possible byte once and inverting the result, rather than
+ * transcribing the code page by hand — correct by construction, using the
+ * exact same platform decoder `decodeParagraph` above already relies on.
+ */
+const windows1252EncodeMap = buildWindows1252EncodeMap();
+
+function buildWindows1252EncodeMap(): Map<string, number> {
+  const decoder = new TextDecoder('windows-1252');
+  const map = new Map<string, number>();
+  for (let byte = 0; byte < 256; byte++) {
+    const char = decoder.decode(Uint8Array.of(byte));
+    if (!map.has(char)) {
+      map.set(char, byte);
+    }
+  }
+  return map;
+}
+
+/** Inverse of `decodeParagraph`'s printable-character handling: `\n` -> New Line (0x07), `\t` -> Tab (0x09), everything else via Windows-1252. */
+function encodeParagraph(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const char of text) {
+    if (char === '\n') {
+      bytes.push(0x07);
+      continue;
+    }
+    if (char === '\t') {
+      bytes.push(0x09);
+      continue;
+    }
+    const byte = windows1252EncodeMap.get(char);
+    if (byte === undefined) {
+      throw new Error(`character ${JSON.stringify(char)} has no Windows-1252 representation`);
+    }
+    bytes.push(byte);
+  }
+  return Uint8Array.from(bytes);
+}
+
+/** Inverse of `readExtraEncodedLength` — psiconv's Basic_Elements "Extra" length-indicator scheme. */
+function encodeExtraLength(length: number): Uint8Array {
+  if (length <= 0x7f) {
+    return Uint8Array.of(length * 2);
+  }
+  if (length <= 0x3fff) {
+    const value = 4 * length + 1;
+    return Uint8Array.of(value & 0xff, (value >>> 8) & 0xff);
+  }
+  const value = 8 * length + 3;
+  return Uint8Array.of(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+}
+
+/**
+ * The Word Status Section's one field that can't just be copied verbatim
+ * from a template: offset 0x06 (4 bytes, LE) is the saved cursor
+ * position, "counted from the start of the Text Section" (psiconv's
+ * Word_Status_Section doc — fetched directly, not inferred: this project
+ * first shipped a version that copied this field unpatched, which opened
+ * far enough to hit a *different*, more specific crash — a "FORM" panic —
+ * than the wrong-Word-Styles-Section version above, consistent with a
+ * cursor offset that pointed at a valid byte count but an invalid
+ * position once the Text Section's actual content changed underneath
+ * it). Resetting it to 0 (start of document) is always in-bounds
+ * regardless of what text follows, at the minor cost of the document not
+ * opening with the cursor wherever the template's author last left it.
+ */
+function patchWordStatusCursorOffset(wordStatus: Uint8Array): Uint8Array {
+  const patched = new Uint8Array(wordStatus);
+  const view = new DataView(patched.buffer);
+  view.setUint32(0x06, 0, true);
+  return patched;
+}
+
+function buildTextSectionBytes(paragraphs: readonly string[]): Uint8Array {
+  const encodedParagraphs = paragraphs.map(encodeParagraph);
+  const contentLength = encodedParagraphs.reduce((sum, p) => sum + p.length + 1, 0); // +1 per paragraph for its trailing New Paragraph byte
+  const lengthPrefix = encodeExtraLength(contentLength);
+
+  const out = new Uint8Array(lengthPrefix.length + contentLength);
+  out.set(lengthPrefix, 0);
+  let cursor = lengthPrefix.length;
+  for (const paragraph of encodedParagraphs) {
+    out.set(paragraph, cursor);
+    cursor += paragraph.length;
+    out[cursor++] = 0x06; // New Paragraph
+  }
+  return out;
+}
+
+/**
+ * Builds a new Word file containing `paragraphs` as plain text — no
+ * formatting yet (no styles/headings/bold; see SPECSv3.md §4's deferred
+ * "phase two"). Rather than reverse-engineering the Word Styles and Page
+ * Layout sections' internal fields (real work, not yet done — see
+ * `epoc-doc.ts`'s `sectionBytes` doc comment), this copies them verbatim
+ * from `template` — a real, valid Word file — and only replaces the Text
+ * Section. The Word Status Section is *mostly* copied verbatim too, with
+ * one exception (see `patchWordStatusCursorOffset` below). The Text
+ * Layout Section is deliberately dropped rather than copied: it's
+ * optional (psiconv: absent means "Normal" style throughout), which is
+ * exactly what a no-formatting document wants anyway. UID1-3 (and
+ * therefore UID4, their checksum) are also copied verbatim from
+ * `template` since they never change.
+ *
+ * `template` matters more than it might look: an early version of this
+ * tried reusing Psion's own pre-installed "Willkommen" document and
+ * produced a file the on-device Word app couldn't open (KERN-EXEC
+ * crash). Comparing it against a document created fresh directly on a
+ * Series 5 showed why — the pre-installed doc's Word Styles Section was
+ * a mere 65 bytes, versus 354 bytes (real font/heading-style tables) in
+ * the freshly-created one. Use a template Word file that was actually
+ * created by the on-device Word app, not an old pre-installed document.
+ */
+export function textToWord(paragraphs: readonly string[], template: Uint8Array): Uint8Array {
+  const header = parseEpocDocHeader(template);
+  if (header.uid3 !== WORD_APP_UID3) {
+    throw new Error(`template is not a Word file (UID3 is ${hex32(header.uid3)}, expected ${hex32(WORD_APP_UID3)})`);
+  }
+
+  const sections = [
+    { id: WORD_STATUS_SECTION_ID, data: patchWordStatusCursorOffset(sectionBytes(header, template, WORD_STATUS_SECTION_ID)) },
+    { id: WORD_STYLES_SECTION_ID, data: sectionBytes(header, template, WORD_STYLES_SECTION_ID) },
+    { id: PAGE_LAYOUT_SECTION_ID, data: sectionBytes(header, template, PAGE_LAYOUT_SECTION_ID) },
+    { id: TEXT_SECTION_ID, data: buildTextSectionBytes(paragraphs) },
+    { id: APPLICATION_ID_SECTION_ID, data: sectionBytes(header, template, APPLICATION_ID_SECTION_ID) },
+  ];
+
+  // Section bodies come right after the 20-byte header; the Section Table
+  // Section itself goes *after* all of them, at the very end of the file.
+  // Both real files this was checked against (a Series 5 Word file and one
+  // freshly created directly on-device) lay it out this way — not "right
+  // after the header," which is what an earlier version of this function
+  // assumed. That assumption round-tripped fine through this project's own
+  // reader (which just follows the offset 0x10 pointer wherever it points)
+  // but deviated from what real EPOC Word files actually look like.
+  const HEADER_SIZE = 0x14;
+  const offsets: number[] = [];
+  let cursor = HEADER_SIZE;
+  for (const section of sections) {
+    offsets.push(cursor);
+    cursor += section.data.length;
+  }
+  const sectionTableOffset = cursor;
+  const sectionTableSize = 1 + sections.length * 8; // 1-byte count + (id, offset) Long pairs
+  const totalSize = sectionTableOffset + sectionTableSize;
+
+  const out = new Uint8Array(totalSize);
+  const view = new DataView(out.buffer);
+
+  out.set(template.subarray(0, 0x10), 0); // UID1, UID2, UID3, UID4 — verbatim, unchanged
+  view.setUint32(0x10, sectionTableOffset, true);
+
+  for (let i = 0; i < sections.length; i++) {
+    out.set(sections[i]!.data, offsets[i]!);
+  }
+
+  out[sectionTableOffset] = sections.length * 2; // BListL: count is in 4-byte Longs, 2 per (id, offset) pair
+  let tableCursor = sectionTableOffset + 1;
+  for (let i = 0; i < sections.length; i++) {
+    view.setUint32(tableCursor, sections[i]!.id, true);
+    view.setUint32(tableCursor + 4, offsets[i]!, true);
+    tableCursor += 8;
+  }
+
+  return out;
 }

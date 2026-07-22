@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { decodeWordParagraphs, wordToMarkdown } from './word';
+import { parseEpocDocHeader, sectionBytes } from './epoc-doc';
+import { decodeWordParagraphs, textToWord, wordToMarkdown } from './word';
 
 function u32le(value: number): number[] {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
@@ -38,6 +39,51 @@ function buildWordFile(contentBytes: number[]): Uint8Array {
 
 function ascii(text: string): number[] {
   return Array.from(text, (c) => c.charCodeAt(0));
+}
+
+const WORD_STATUS_SECTION_ID = 0x10000243;
+const WORD_STYLES_SECTION_ID = 0x10000104;
+const PAGE_LAYOUT_SECTION_ID = 0x10000105;
+const APPLICATION_ID_SECTION_ID = 0x10000089;
+const TEXT_LAYOUT_SECTION_ID = 0x10000143;
+
+/** Builds a template Word file with all five mandatory sections (plus an optional Text Layout Section), so `textToWord` has something realistic to copy from. */
+function buildFullWordFile(options: { textContentBytes: number[]; includeTextLayout?: boolean }): Uint8Array {
+  const header = [
+    ...u32le(0x10000037),
+    ...u32le(0x1000006d),
+    ...u32le(0x1000007f),
+    ...u32le(0),
+    ...u32le(0x14),
+  ];
+  // Real Word Status Sections are 14 bytes (psiconv's Word_Status_Section
+  // doc): bytes 6-9 are a saved cursor offset that textToWord patches to
+  // 0, so this fixture uses a distinctive, non-zero value there
+  // ([0x99, 0x99, 0x99, 0x99]) specifically to make sure the patch is
+  // exercised rather than coincidentally already being 0.
+  const wordStatus = [0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0x99, 0x99, 0x99, 0x99, 0xa7, 0xa8, 0xa9, 0xaa];
+  const sections = [
+    { id: WORD_STATUS_SECTION_ID, data: wordStatus },
+    { id: WORD_STYLES_SECTION_ID, data: [0xb1, 0xb2, 0xb3, 0xb4] },
+    { id: PAGE_LAYOUT_SECTION_ID, data: [0xc1] },
+    { id: TEXT_SECTION_ID, data: [...encodeExtraLength(options.textContentBytes.length), ...options.textContentBytes] },
+    { id: APPLICATION_ID_SECTION_ID, data: [0xd1, 0xd2] },
+    ...(options.includeTextLayout ? [{ id: TEXT_LAYOUT_SECTION_ID, data: [0xe1, 0xe2, 0xe3] }] : []),
+  ];
+
+  const tableOffset = 0x14;
+  const tableSize = 1 + sections.length * 8;
+  let cursor = tableOffset + tableSize;
+  const offsets: number[] = [];
+  for (const s of sections) {
+    offsets.push(cursor);
+    cursor += s.data.length;
+  }
+
+  const table = [sections.length * 2, ...sections.flatMap((s, i) => [...u32le(s.id), ...u32le(offsets[i]!)])];
+  const bodies = sections.flatMap((s) => s.data);
+
+  return Uint8Array.from([...header, ...table, ...bodies]);
 }
 
 describe('decodeWordParagraphs', () => {
@@ -92,5 +138,53 @@ describe('wordToMarkdown', () => {
       ...ascii('Second paragraph.'),
     ]);
     expect(wordToMarkdown(file)).toBe('First paragraph.\n\nSecond paragraph.');
+  });
+});
+
+describe('textToWord', () => {
+  test('round-trips plain paragraphs through decodeWordParagraphs', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('placeholder') });
+    const written = textToWord(['First paragraph.', 'Second paragraph with ümlaut.'], template);
+    expect(decodeWordParagraphs(written)).toEqual(['First paragraph.', 'Second paragraph with ümlaut.']);
+  });
+
+  test('copies Word Styles/Page Layout/Application ID sections verbatim from the template', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('old text') });
+    const written = textToWord(['new text'], template);
+    const writtenHeader = parseEpocDocHeader(written);
+
+    expect(Array.from(sectionBytes(writtenHeader, written, WORD_STYLES_SECTION_ID))).toEqual([0xb1, 0xb2, 0xb3, 0xb4]);
+    expect(Array.from(sectionBytes(writtenHeader, written, PAGE_LAYOUT_SECTION_ID))).toEqual([0xc1]);
+    expect(Array.from(sectionBytes(writtenHeader, written, APPLICATION_ID_SECTION_ID))).toEqual([0xd1, 0xd2]);
+  });
+
+  test('copies the Word Status Section verbatim except for zeroing the saved cursor offset', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('old text') });
+    const written = textToWord(['new text'], template);
+    const writtenHeader = parseEpocDocHeader(written);
+
+    // [0x99, 0x99, 0x99, 0x99] at offset 6 (the cursor offset) -> zeroed; everything else unchanged.
+    expect(Array.from(sectionBytes(writtenHeader, written, WORD_STATUS_SECTION_ID))).toEqual([
+      0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0, 0, 0, 0, 0xa7, 0xa8, 0xa9, 0xaa,
+    ]);
+  });
+
+  test('drops the Text Layout Section even when the template has one', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('x'), includeTextLayout: true });
+    const written = textToWord(['y'], template);
+    const writtenHeader = parseEpocDocHeader(written);
+    expect(writtenHeader.sections.has(TEXT_LAYOUT_SECTION_ID)).toBe(false);
+  });
+
+  test('encodes tabs and newlines back to their control bytes', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('placeholder') });
+    const written = textToWord(['a\tb\nc'], template);
+    expect(decodeWordParagraphs(written)).toEqual(['a\tb\nc']);
+  });
+
+  test('rejects a template whose UID3 is not Word', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('x') });
+    template[8] = 0x7d; // corrupt UID3 to Sketch's (0x1000007D)
+    expect(() => textToWord(['hi'], template)).toThrow(/not a Word file/);
   });
 });

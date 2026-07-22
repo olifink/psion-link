@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseEpocDocHeader } from './epoc-doc';
+import { parseEpocDocHeader, sectionBytes } from './epoc-doc';
 
 function u32le(value: number): number[] {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
@@ -63,5 +63,29 @@ describe('parseEpocDocHeader', () => {
   test('throws when the section table offset points outside the file', () => {
     const doc = Uint8Array.from([...u32le(0x10000037), ...u32le(0x1000006d), ...u32le(0x1000007e), ...u32le(0), ...u32le(9999)]);
     expect(() => parseEpocDocHeader(doc)).toThrow();
+  });
+});
+
+describe('sectionBytes', () => {
+  test('bounds a middle section by the following section\'s offset', () => {
+    const doc = buildDoc(0x1000007e, [
+      { id: 0x10000243, data: [0x11, 0x11] },
+      { id: 0x10000052, data: [0xaa, 0xbb, 0xbb] },
+      { id: 0x10000089, data: [0xcc, 0xcc, 0xcc, 0xcc] },
+    ]);
+    const header = parseEpocDocHeader(doc);
+    expect(Array.from(sectionBytes(header, doc, 0x10000052))).toEqual([0xaa, 0xbb, 0xbb]);
+  });
+
+  test('bounds the last section by EOF', () => {
+    const doc = buildDoc(0x1000007e, [{ id: 0x10000052, data: [1, 2, 3, 4] }]);
+    const header = parseEpocDocHeader(doc);
+    expect(Array.from(sectionBytes(header, doc, 0x10000052))).toEqual([1, 2, 3, 4]);
+  });
+
+  test('throws for an unknown section ID', () => {
+    const doc = buildDoc(0x1000007e, [{ id: 0x10000052, data: [1] }]);
+    const header = parseEpocDocHeader(doc);
+    expect(() => sectionBytes(header, doc, 0x99999999)).toThrow();
   });
 });

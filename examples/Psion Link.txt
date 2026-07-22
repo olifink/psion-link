@@ -1,0 +1,7 @@
+Psion Link
+
+A Chrome-only, local-first PWA that speaks the Psion Link Protocol (PLP) over WebSerial, so EPOC32-era Psion handhelds (Series 5, 5mx, Revo, netBook 7) can be browsed and synced from a modern Chromebook/Chrome machine — no drivers, no native binaries, no cloud round-trip.
+
+File transfer and basic filesystem management is the whole product: browse drives/directories, upload/download, rename/delete, mkdir, device info.
+
+See BRIEF.md for the full handoff spec and CLAUDE.md for the binding architecture decisions.
