@@ -95,6 +95,18 @@ for the binding architecture decisions.
       (`rfsv/transfer.ts`, `rfsv/path.ts`) are framework-free and
       `bun test`-covered, same as the rest of the protocol core.
 
+**Hardware validation:**
+
+- [x] End-to-end bring-up against a real Psion Series 5 over an FT232-based
+      USB-RS232 adapter and a Chromebook (BRIEF.md §7's "hardware-in-the-loop"
+      step): connect, drive/directory listing, up/download, rename/delete,
+      mkdir all confirmed working. This surfaced two RFSV32 bugs invisible
+      to the fixture-driven test suite — `RFSV32_OPEN_DIR`'s attribute DWORD
+      is a filter mask (subdirectories need `Hidden|System|Directory`
+      requested explicitly or the device omits them) and `RFSV32_MKDIR_ALL`
+      requires a trailing path separator — both fixed and cross-checked
+      against plptools' `lib/rfsv32.cc`.
+
 ## Tooling
 
 Everything goes through `bun` — never `npm`/`node`/`npx`.
