@@ -42,7 +42,11 @@
     <button matIconButton (click)="newFolder()" matTooltip="New folder" aria-label="New folder">
       <mat-icon>create_new_folder</mat-icon>
     </button>
-    <button matButton (click)="fileInput.click()">
+    <button
+      matButton
+      (click)="fileInput.click()"
+      [matTooltip]="settings.convertOnTransfer() ? '.txt files upload as Word documents' : ''"
+    >
       <mat-icon>upload</mat-icon>
       Upload
     </button>

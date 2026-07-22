@@ -103,17 +103,31 @@ for the binding architecture decisions.
       to the raw file with an inline notice if conversion fails. Files
       with no converter show a tooltip explaining why and are disabled
       for download while the toggle is on, rather than silently
-      downloading unconverted. Upload direction isn't wired up yet:
-      Markdown → Word doesn't exist. The
-      three format decoders (`convert/word.ts`, `convert/sketch.ts`,
+      downloading unconverted. Upload direction is one-way so far: a
+      `.txt` file becomes a native Word document (`convert/word.ts`'s
+      `plainTextToWord`, plain text only — no Markdown syntax parsing
+      yet), using a bundled template file
+      (`public/templates/word-template.wrd`) for the Word Status/Styles/
+      Page Layout/Application ID sections it doesn't construct from
+      scratch. Unlike downloads, uploads of anything else are never
+      blocked — this file browser's core job is general file management,
+      and blocking most uploads by default (once the toggle defaulted on)
+      would work against that. The
+      four format decoders/encoders (`convert/word.ts`, `convert/sketch.ts`,
       `convert/record.ts`) plus a from-scratch PNG encoder
       (`convert/png.ts`, using the Web Compression Streams API so it
       works identically under `bun test` and in Chrome) are
       framework-free and `bun test`-covered, verified against real
       files pulled off a Series 5 (`examples/`) rather than trusted from
-      documentation alone — this caught two real bugs: Record's
-      "standard" codec is A-law-companded, not linear PCM, and Sketch's
-      pixel data is embedded partway through its header, not after it.
+      documentation alone — this caught real bugs at every turn: Record's
+      "standard" codec is A-law-companded, not linear PCM; Sketch's pixel
+      data is embedded partway through its header, not after it; and
+      writing a new Word file needs both a template sourced from an
+      on-device-created document (Psion's own pre-installed one has a far
+      sparser style table and crashes the Word app) and one patched field
+      (a saved cursor offset that otherwise points at an invalid position
+      once the text underneath it changes) — confirmed opening correctly
+      on a real Series 5.
 
 **Hardware validation:**
 

@@ -171,8 +171,25 @@ function buildWindows1252EncodeMap(): Map<string, number> {
   return map;
 }
 
-/** Inverse of `decodeParagraph`'s printable-character handling: `\n` -> New Line (0x07), `\t` -> Tab (0x09), everything else via Windows-1252. */
-function encodeParagraph(text: string): Uint8Array {
+/**
+ * Stands in for any character with no Windows-1252 representation (e.g.
+ * "→", smart quotes/dashes the source didn't already use the CP1252 form
+ * of, emoji). `~` (0x7E) rather than, say, `?`: valid, printable, and
+ * rare enough in ordinary prose that it reads as "something got
+ * substituted here" rather than blending in.
+ */
+const FALLBACK_CHAR = '~';
+
+/**
+ * Inverse of `decodeParagraph`'s printable-character handling: `\n` ->
+ * New Line (0x07), `\t` -> Tab (0x09), everything else via Windows-1252.
+ * Unmappable characters are substituted with `FALLBACK_CHAR` rather than
+ * rejected outright — the goal here is getting most of a document onto
+ * the device with minimal friction, not a lossless/perfect
+ * transcription; every substitution is recorded into `substituted` so
+ * the caller can still tell the user it happened.
+ */
+function encodeParagraph(text: string, substituted: Set<string>): Uint8Array {
   const bytes: number[] = [];
   for (const char of text) {
     if (char === '\n') {
@@ -183,9 +200,10 @@ function encodeParagraph(text: string): Uint8Array {
       bytes.push(0x09);
       continue;
     }
-    const byte = windows1252EncodeMap.get(char);
+    let byte = windows1252EncodeMap.get(char);
     if (byte === undefined) {
-      throw new Error(`character ${JSON.stringify(char)} has no Windows-1252 representation`);
+      substituted.add(char);
+      byte = windows1252EncodeMap.get(FALLBACK_CHAR)!;
     }
     bytes.push(byte);
   }
@@ -226,8 +244,8 @@ function patchWordStatusCursorOffset(wordStatus: Uint8Array): Uint8Array {
   return patched;
 }
 
-function buildTextSectionBytes(paragraphs: readonly string[]): Uint8Array {
-  const encodedParagraphs = paragraphs.map(encodeParagraph);
+function buildTextSectionBytes(paragraphs: readonly string[], substituted: Set<string>): Uint8Array {
+  const encodedParagraphs = paragraphs.map((p) => encodeParagraph(p, substituted));
   const contentLength = encodedParagraphs.reduce((sum, p) => sum + p.length + 1, 0); // +1 per paragraph for its trailing New Paragraph byte
   const lengthPrefix = encodeExtraLength(contentLength);
 
@@ -265,8 +283,13 @@ function buildTextSectionBytes(paragraphs: readonly string[]): Uint8Array {
  * a mere 65 bytes, versus 354 bytes (real font/heading-style tables) in
  * the freshly-created one. Use a template Word file that was actually
  * created by the on-device Word app, not an old pre-installed document.
+ *
+ * `substituted`, if passed, collects every distinct character that had
+ * no Windows-1252 representation and got replaced with `~` (see
+ * `encodeParagraph`) — pass a `Set` to find out afterwards whether that
+ * happened, or omit it if you don't care.
  */
-export function textToWord(paragraphs: readonly string[], template: Uint8Array): Uint8Array {
+export function textToWord(paragraphs: readonly string[], template: Uint8Array, substituted: Set<string> = new Set()): Uint8Array {
   const header = parseEpocDocHeader(template);
   if (header.uid3 !== WORD_APP_UID3) {
     throw new Error(`template is not a Word file (UID3 is ${hex32(header.uid3)}, expected ${hex32(WORD_APP_UID3)})`);
@@ -276,7 +299,7 @@ export function textToWord(paragraphs: readonly string[], template: Uint8Array):
     { id: WORD_STATUS_SECTION_ID, data: patchWordStatusCursorOffset(sectionBytes(header, template, WORD_STATUS_SECTION_ID)) },
     { id: WORD_STYLES_SECTION_ID, data: sectionBytes(header, template, WORD_STYLES_SECTION_ID) },
     { id: PAGE_LAYOUT_SECTION_ID, data: sectionBytes(header, template, PAGE_LAYOUT_SECTION_ID) },
-    { id: TEXT_SECTION_ID, data: buildTextSectionBytes(paragraphs) },
+    { id: TEXT_SECTION_ID, data: buildTextSectionBytes(paragraphs, substituted) },
     { id: APPLICATION_ID_SECTION_ID, data: sectionBytes(header, template, APPLICATION_ID_SECTION_ID) },
   ];
 
@@ -318,4 +341,28 @@ export function textToWord(paragraphs: readonly string[], template: Uint8Array):
   }
 
   return out;
+}
+
+/**
+ * Splits plain text into paragraphs the way this project's generated
+ * documents do: one paragraph per line, including blank lines (the
+ * on-device Word app represents a blank line as a literal empty
+ * paragraph — confirmed by decoding a real device-authored file), with
+ * trailing blank lines dropped.
+ */
+function splitPlainTextParagraphs(text: string): string[] {
+  const lines = text.split('\n').map((line) => line.trim());
+  while (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  return lines;
+}
+
+/**
+ * Converts plain text straight to a new Word file's bytes, using
+ * `template`'s Word Status/Styles/Page Layout/Application ID sections
+ * (see `textToWord`). `substituted` behaves the same as `textToWord`'s.
+ */
+export function plainTextToWord(text: string, template: Uint8Array, substituted: Set<string> = new Set()): Uint8Array {
+  return textToWord(splitPlainTextParagraphs(text), template, substituted);
 }

@@ -16,14 +16,15 @@ transfer time:
 
 - **Download**: a Word document lands on disk as `.md`; a Sketch drawing
   lands as `.png`; a Record voice memo lands as `.wav`.
-- **Upload**: a `.md` file gets written to the device as a native Word
-  document. Neither Sketch nor Record has an upload-direction conversion in
-  v3 — see §5, §6, §10.
+- **Upload**: a `.txt` file gets written to the device as a native Word
+  document (plain text only, no Markdown syntax parsing yet — see §4's
+  "Update"). Neither Sketch nor Record has an upload-direction conversion
+  in v3 — see §5, §6, §10.
 
-When the toggle is off (today's behavior, and the recommended default —
-see §10), transfers stay byte-identical. This is opt-in per recognized file
-type, not a blanket transform — anything not in the known-convertible set
-(§3) passes through unchanged regardless of the toggle.
+When the toggle is off, downloads stay byte-identical and uploads are
+completely unaffected either way — see §7 for why upload was deliberately
+*not* made opt-in-restrictive the way download is (that was this doc's
+original plan; revised once the toggle's default flipped to on).
 
 ### Priority order
 
@@ -234,15 +235,20 @@ useful v3 MVP for this format.
   mid-build: a toggle control inside a `mat-menu-item` needs
   `(click)="$event.stopPropagation()"` on the toggle itself, or clicking it
   closes the menu along with toggling it — minor, but worth remembering.
-- **Upload is restricted while the toggle is on.** With conversion enabled,
-  only recognized source formats for upload-direction conversion (`.md`,
-  for now — the only format with an upload path per §9) are accepted:
-  the file picker's `accept` attribute is scoped to them, and drag-and-drop
-  should grey out / reject anything else rather than silently uploading it
-  unconverted. This is a deliberate behavior change from today (where any
-  file uploads as-is) — worth a beat in the confirm/empty-state copy so
-  it's not surprising the first time someone drags an unrelated file in
-  with the toggle on.
+- **Revised from this doc's original plan: upload is *not* restricted
+  while the toggle is on.** The original idea was to scope the file
+  picker/drag-and-drop to only accept convertible formats and grey out
+  everything else, written back when the toggle defaulted off. Once it
+  defaulted on (§10), that would have meant *most uploads get blocked by
+  default* — this file browser's core job is general file management, and
+  conversion is an opt-in nicety layered on top of a `.txt` special case,
+  not the point of uploading in general. Shipped behavior instead: `.txt`
+  files convert to Word documents (via `word.ts`'s `plainTextToWord`,
+  using a bundled template file's Word Status/Styles/Page Layout/
+  Application ID sections — see that function's doc comment for why a
+  template exists at all — fetched once per session from
+  `public/templates/word-template.wrd`, cached); everything else uploads
+  exactly as it did before this feature existed, toggle or no toggle.
 - Conversion failure (malformed file, unsupported layer feature) falls back
   to the raw/unconverted transfer with an inline notice, rather than
   blocking the transfer outright — matches the existing

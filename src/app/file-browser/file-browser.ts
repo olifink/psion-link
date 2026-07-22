@@ -6,7 +6,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
-import { recordToWav, sketchToPng, wordToMarkdown } from '../../convert';
+import { plainTextToWord, recordToWav, sketchToPng, wordToMarkdown } from '../../convert';
 import {
   DriveListEntry,
   RfsvClient,
@@ -111,16 +111,36 @@ interface DownloadConversion {
   convert: (data: Uint8Array) => Promise<Uint8Array>;
 }
 
-/**
- * SPECSv3.md's "convert files on transfer" feature: download-direction
- * only for now (Markdown -> Word upload conversion isn't built yet — see
- * SPECSv3.md §4's phase two). Keyed by UID3, same as `KNOWN_APP_UIDS`.
- */
+/** SPECSv3.md's "convert files on transfer" feature, download direction. Keyed by UID3, same as `KNOWN_APP_UIDS`. */
 const DOWNLOAD_CONVERSIONS: Record<number, DownloadConversion> = {
   0x1000007f: { extension: 'md', convert: (data) => Promise.resolve(new TextEncoder().encode(wordToMarkdown(data))) }, // Word
   0x1000007d: { extension: 'png', convert: sketchToPng }, // Sketch
   0x1000007e: { extension: 'wav', convert: (data) => Promise.resolve(recordToWav(data)) }, // Record
 };
+
+/**
+ * Upload direction: keyed by local file extension (lowercased, no dot) —
+ * the device has no extension convention of its own to key off of.
+ * Unlike downloads, an upload with no matching converter isn't blocked:
+ * this file browser's core job is general file management, and with the
+ * toggle on by default, treating every non-`.txt` upload as an error
+ * would get in the way of that far more often than it'd help.
+ */
+const UPLOAD_CONVERSIONS: Record<string, (text: string, template: Uint8Array, substituted: Set<string>) => Uint8Array> = {
+  txt: plainTextToWord,
+};
+
+const WORD_TEMPLATE_URL = 'templates/word-template.wrd';
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
+function stripExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? name : name.slice(0, dot);
+}
 
 function saveBlobAsFile(data: Uint8Array, name: string): void {
   // `data` may be typed `Uint8Array<ArrayBufferLike>`; Blob wants a concrete `ArrayBuffer`-backed view.
@@ -439,8 +459,30 @@ export class FileBrowser {
     };
     this.transfers.update((list) => [...list, transfer]);
     try {
-      const data = new Uint8Array(await file.arrayBuffer());
-      await uploadFile(client, joinEpocPath(path, file.name), data, {
+      let data: Uint8Array;
+      let deviceName = file.name;
+      let note: string | undefined;
+
+      const convert = this.settings.convertOnTransfer() ? UPLOAD_CONVERSIONS[fileExtension(file.name)] : undefined;
+      if (convert) {
+        try {
+          const template = await this.loadWordTemplate();
+          const substituted = new Set<string>();
+          data = convert(await file.text(), template, substituted);
+          deviceName = stripExtension(file.name); // device files carry no extension — SPECSv3.md §10
+          if (substituted.size > 0) {
+            note = `${substituted.size} character${substituted.size === 1 ? '' : 's'} with no Word equivalent replaced with "~": ${[...substituted].join(' ')}`;
+          }
+        } catch (err) {
+          note = `Conversion failed, uploaded the original file: ${(err as Error).message}`;
+          data = new Uint8Array(await file.arrayBuffer());
+        }
+      } else {
+        data = new Uint8Array(await file.arrayBuffer());
+      }
+
+      this.updateTransfer(transfer.id, { name: deviceName, totalBytes: data.length, note });
+      await uploadFile(client, joinEpocPath(path, deviceName), data, {
         signal: controller.signal,
         onProgress: (p) => this.updateTransfer(transfer.id, { bytesTransferred: p.bytesTransferred, totalBytes: p.totalBytes }),
       });
@@ -452,6 +494,21 @@ export class FileBrowser {
 
   private updateTransfer(id: number, patch: Partial<Transfer>): void {
     this.transfers.update((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  /** Fetched once per session and cached — see SPECSv3.md's UI wiring note on `textToWord`'s template source. */
+  private wordTemplate: Promise<Uint8Array> | null = null;
+
+  private loadWordTemplate(): Promise<Uint8Array> {
+    this.wordTemplate ??= fetch(WORD_TEMPLATE_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`couldn't load the Word template (HTTP ${response.status})`);
+        }
+        return response.arrayBuffer();
+      })
+      .then((buffer) => new Uint8Array(buffer));
+    return this.wordTemplate;
   }
 
   protected cancelTransfer(transfer: Transfer): void {

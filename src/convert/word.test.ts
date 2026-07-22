@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { parseEpocDocHeader, sectionBytes } from './epoc-doc';
-import { decodeWordParagraphs, textToWord, wordToMarkdown } from './word';
+import { decodeWordParagraphs, plainTextToWord, textToWord, wordToMarkdown } from './word';
 
 function u32le(value: number): number[] {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
@@ -186,5 +186,28 @@ describe('textToWord', () => {
     const template = buildFullWordFile({ textContentBytes: ascii('x') });
     template[8] = 0x7d; // corrupt UID3 to Sketch's (0x1000007D)
     expect(() => textToWord(['hi'], template)).toThrow(/not a Word file/);
+  });
+
+  test('substitutes characters with no Windows-1252 representation instead of throwing', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('placeholder') });
+    const substituted = new Set<string>();
+
+    const written = textToWord(['a → b'], template, substituted);
+
+    expect(decodeWordParagraphs(written)).toEqual(['a ~ b']);
+    expect(substituted).toEqual(new Set(['→']));
+  });
+
+  test('substituted defaults to an internal Set when the caller doesn\'t pass one', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('placeholder') });
+    expect(() => textToWord(['emoji: 🎉'], template)).not.toThrow();
+  });
+});
+
+describe('plainTextToWord', () => {
+  test('splits on lines, preserving blank lines as empty paragraphs, and drops trailing blank lines', () => {
+    const template = buildFullWordFile({ textContentBytes: ascii('placeholder') });
+    const written = plainTextToWord('Title\n\nBody line.\n\n\n', template);
+    expect(decodeWordParagraphs(written)).toEqual(['Title', '', 'Body line.']);
   });
 });
