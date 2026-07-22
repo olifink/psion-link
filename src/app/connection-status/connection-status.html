@@ -6,21 +6,14 @@
 } @else {
   @switch (psionLink.connectionState()) {
     @case ('disconnected') {
-      <span class="status">
-        @if (psionLink.lastError(); as error) {
-          <span class="status__error" [matTooltip]="error">{{ error }}</span>
-        }
-        <button matButton="filled" (click)="connect()">
-          <mat-icon>cable</mat-icon>
-          Connect
-        </button>
-      </span>
+      @if (psionLink.lastError(); as error) {
+        <span class="status status--warn" [matTooltip]="error">{{ error }}</span>
+      } @else {
+        <span class="status">Not connected</span>
+      }
     }
     @case ('connecting') {
-      <span class="status">
-        <mat-progress-spinner diameter="18" mode="indeterminate" />
-        Connecting…
-      </span>
+      <span class="status">Connecting…</span>
     }
     @case ('connected') {
       <span class="status status--connected">
@@ -34,7 +27,6 @@
             · ROM {{ peer.version }} · id {{ peer.id }}
           }
         </span>
-        <button matButton (click)="disconnect()">Disconnect</button>
       </span>
     }
   }

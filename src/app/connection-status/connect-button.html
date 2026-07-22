@@ -1,0 +1,22 @@
+@if (psionLink.isSupported) {
+  @switch (psionLink.connectionState()) {
+    @case ('disconnected') {
+      <button matButton="filled" (click)="connect()">
+        <mat-icon>cable</mat-icon>
+        Connect
+      </button>
+    }
+    @case ('connecting') {
+      <button matButton disabled>
+        <mat-progress-spinner diameter="18" mode="indeterminate" />
+        Connecting…
+      </button>
+    }
+    @case ('connected') {
+      <button matButton (click)="disconnect()">
+        <mat-icon>link_off</mat-icon>
+        Disconnect
+      </button>
+    }
+  }
+}
