@@ -86,7 +86,7 @@
               <mat-icon>{{ entry.isDirectory ? 'folder' : 'insert_drive_file' }}</mat-icon>
             </td>
             <td class="entries__name">
-              <button matButton class="entries__name-button" (click)="open(entry)">{{ entry.name }}</button>
+              <button type="button" class="entries__name-button" (click)="open(entry)">{{ entry.name }}</button>
             </td>
             <td class="entries__size">{{ entry.isDirectory ? '' : formatBytes(entry.sizeBytes) }}</td>
             <td class="entries__modified">{{ formatDateTime(entry.modified) }}</td>
