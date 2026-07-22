@@ -19,7 +19,8 @@ installer would write.
 ### In scope (v2 MVP)
 
 - Parsing the EPOC release 3–5 SIS format (our device set — Series 5, 5mx,
-  Revo — is ER3–5; see §7 for the netBook 7/ER6 question).
+  Revo, Series 7 — is confirmed ER3–5; see §7 for the still-open netBook/ER6
+  question).
 - Single-language installs, or a language picker when a package offers more
   than one.
 - Plain file copy (`FF`/standard files) to their destination paths.
@@ -221,10 +222,14 @@ own UI reads it back (yet).
 
 ## 7. Open questions
 
-- **netBook 7 = ER6?** If so, its SIS packages hit the ER6-reject path by
-  design for v2 MVP — confirm this is acceptable, or whether ER6 support
-  (decompression + extended header) should be pulled into v2 rather than
-  deferred.
+- **netBook = ER6?** BRIEF.md/CLAUDE.md's device list says "netBook 7" as
+  if it were one device, but per the owner, the **netBook** and the
+  **Series 7** are actually two distinct machines — worth a wording fix in
+  BRIEF.md/CLAUDE.md separately, not bundled into this doc. **Series 7 is
+  confirmed ER5** (software 1.05(254)), so it's unconditionally in scope for
+  the ER3–5 parser above, no reject path needed. The **netBook**'s EPOC
+  release is still unconfirmed — owner is tracking the device down to check
+  before we start building.
 - **Language picker UX**: dropdown in the confirm dialog vs. a separate
   step? Low-stakes, decide when building.
 - **Requisite enforcement**: confirmed out of MVP scope (§1) — revisit once
