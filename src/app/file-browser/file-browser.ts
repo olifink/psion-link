@@ -44,6 +44,63 @@ function compareEntries(a: RfsvDirEntry, b: RfsvDirEntry): number {
   return a.name.localeCompare(b.name);
 }
 
+function hex32(value: number): string {
+  return `0x${(value >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
+}
+
+/**
+ * EPOC identifies a file's type via UID3 (the owning application's UID)
+ * rather than (just) its extension. Sourced from a real Series 5's
+ * \System listing rather than guessed from incomplete public docs —
+ * extend as more get confirmed. 0x1000007D is Sketch, not Paint;
+ * 0x1000007E is Record (voice memos), not Data.
+ */
+const KNOWN_APP_UIDS: Record<number, string> = {
+  0x10000076: 'SHELL',
+  0x1000007d: 'Sketch',
+  0x1000007e: 'Record',
+  0x1000007f: 'Word',
+  0x10000080: 'TimeW',
+  0x10000083: 'Calc',
+  0x10000084: 'Agenda',
+  0x10000085: 'Program',
+  0x10000086: 'Data',
+  0x10000087: 'Comms',
+  0x10000088: 'Sheet',
+};
+
+const APP_ICONS: Record<string, string> = {
+  Word: 'description',
+  Sheet: 'table_chart',
+  Record: 'mic',
+  Data: 'storage',
+  Agenda: 'event',
+  Sketch: 'brush',
+  Calc: 'calculate',
+  Comms: 'call',
+};
+
+/** UID3 as hex, for the tooltip — always available regardless of whether we recognize it. */
+function formatUid(entry: RfsvDirEntry): string {
+  return entry.uid ? hex32(entry.uid[2]) : '';
+}
+
+/** Friendly app name when UID3 is recognized, otherwise the raw hex UID3 as a fallback. */
+function fileTypeLabel(entry: RfsvDirEntry): string {
+  if (!entry.uid) {
+    return '';
+  }
+  return KNOWN_APP_UIDS[entry.uid[2]] ?? hex32(entry.uid[2]);
+}
+
+function fileIcon(entry: RfsvDirEntry): string {
+  if (entry.isDirectory) {
+    return 'folder';
+  }
+  const label = entry.uid ? KNOWN_APP_UIDS[entry.uid[2]] : undefined;
+  return (label && APP_ICONS[label]) || 'insert_drive_file';
+}
+
 function saveBlobAsFile(data: Uint8Array, name: string): void {
   // `data` may be typed `Uint8Array<ArrayBufferLike>`; Blob wants a concrete `ArrayBuffer`-backed view.
   const blob = new Blob([new Uint8Array(data)]);
@@ -73,6 +130,9 @@ export class FileBrowser {
 
   protected readonly formatBytes = formatBytes;
   protected readonly formatDateTime = formatDateTime;
+  protected readonly formatUid = formatUid;
+  protected readonly fileTypeLabel = fileTypeLabel;
+  protected readonly fileIcon = fileIcon;
 
   protected readonly drives = signal<DriveListEntry[]>([]);
   protected readonly currentDrive = signal<string | null>(null);

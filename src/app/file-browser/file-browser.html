@@ -83,12 +83,13 @@
         @for (entry of entries(); track entry.name) {
           <tr class="entries__row">
             <td class="entries__icon">
-              <mat-icon>{{ entry.isDirectory ? 'folder' : 'insert_drive_file' }}</mat-icon>
+              <mat-icon>{{ fileIcon(entry) }}</mat-icon>
             </td>
             <td class="entries__name">
               <button type="button" class="entries__name-button" (click)="open(entry)">{{ entry.name }}</button>
             </td>
             <td class="entries__size">{{ entry.isDirectory ? '' : formatBytes(entry.sizeBytes) }}</td>
+            <td class="entries__type" [matTooltip]="entry.uid ? 'UID3 ' + formatUid(entry) : ''">{{ fileTypeLabel(entry) }}</td>
             <td class="entries__modified">{{ formatDateTime(entry.modified) }}</td>
             <td class="entries__actions">
               <button matIconButton [matMenuTriggerFor]="rowMenu" matTooltip="More actions" aria-label="More actions">
