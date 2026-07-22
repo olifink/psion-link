@@ -1,0 +1,9 @@
+<button matIconButton [matMenuTriggerFor]="menu" matTooltip="More options" aria-label="More options">
+  <mat-icon>more_vert</mat-icon>
+</button>
+<mat-menu #menu="matMenu">
+  <button mat-menu-item (click)="toggleConvertOnTransfer()">
+    <mat-icon>{{ settings.convertOnTransfer() ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+    Convert files on transfer
+  </button>
+</mat-menu>

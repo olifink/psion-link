@@ -134,6 +134,9 @@
               <div class="transfer__error">{{ transfer.error }}</div>
             } @else {
               <div class="transfer__done">Done — {{ formatBytes(transfer.bytesTransferred) }}</div>
+              @if (transfer.note) {
+                <div class="transfer__note">{{ transfer.note }}</div>
+              }
             }
           </div>
           @if (transfer.status === 'active') {

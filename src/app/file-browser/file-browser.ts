@@ -6,6 +6,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
+import { recordToWav, sketchToPng, wordToMarkdown } from '../../convert';
 import {
   DriveListEntry,
   RfsvClient,
@@ -20,6 +21,7 @@ import {
   uploadFile,
 } from '../../protocol';
 import { PsionLinkService } from '../core/psion-link.service';
+import { SettingsService } from '../core/settings.service';
 import { formatBytes, formatDateTime } from '../shared/format';
 import { ConfirmDialog } from './confirm-dialog';
 import { TextPromptDialog } from './text-prompt-dialog';
@@ -32,6 +34,8 @@ export interface Transfer {
   totalBytes: number;
   status: 'active' | 'done' | 'error';
   error?: string;
+  /** A non-fatal notice — e.g. "saved unconverted" when conversion failed but the raw transfer still succeeded. */
+  note?: string;
   controller: AbortController;
 }
 
@@ -101,6 +105,23 @@ function fileIcon(entry: RfsvDirEntry): string {
   return (label && APP_ICONS[label]) || 'insert_drive_file';
 }
 
+interface DownloadConversion {
+  /** Appended to the on-device filename (which itself carries no extension — SPECSv3.md §10) for the locally-saved file. */
+  extension: string;
+  convert: (data: Uint8Array) => Promise<Uint8Array>;
+}
+
+/**
+ * SPECSv3.md's "convert files on transfer" feature: download-direction
+ * only for now (Markdown -> Word upload conversion isn't built yet — see
+ * SPECSv3.md §4's phase two). Keyed by UID3, same as `KNOWN_APP_UIDS`.
+ */
+const DOWNLOAD_CONVERSIONS: Record<number, DownloadConversion> = {
+  0x1000007f: { extension: 'md', convert: (data) => Promise.resolve(new TextEncoder().encode(wordToMarkdown(data))) }, // Word
+  0x1000007d: { extension: 'png', convert: sketchToPng }, // Sketch
+  0x1000007e: { extension: 'wav', convert: (data) => Promise.resolve(recordToWav(data)) }, // Record
+};
+
 function saveBlobAsFile(data: Uint8Array, name: string): void {
   // `data` may be typed `Uint8Array<ArrayBufferLike>`; Blob wants a concrete `ArrayBuffer`-backed view.
   const blob = new Blob([new Uint8Array(data)]);
@@ -126,6 +147,7 @@ function saveBlobAsFile(data: Uint8Array, name: string): void {
 })
 export class FileBrowser {
   protected readonly psionLink = inject(PsionLinkService);
+  protected readonly settings = inject(SettingsService);
   private readonly dialog = inject(MatDialog);
 
   protected readonly formatBytes = formatBytes;
@@ -343,8 +365,22 @@ export class FileBrowser {
         signal: controller.signal,
         onProgress: (p) => this.updateTransfer(transfer.id, { bytesTransferred: p.bytesTransferred, totalBytes: p.totalBytes }),
       });
-      this.updateTransfer(transfer.id, { status: 'done', bytesTransferred: data.length });
-      saveBlobAsFile(data, entry.name);
+
+      let outputData = data;
+      let outputName = entry.name;
+      let note: string | undefined;
+      const conversion = this.settings.convertOnTransfer() && entry.uid ? DOWNLOAD_CONVERSIONS[entry.uid[2]] : undefined;
+      if (conversion) {
+        try {
+          outputData = await conversion.convert(data);
+          outputName = `${entry.name}.${conversion.extension}`;
+        } catch (err) {
+          note = `Conversion failed, saved the original file: ${(err as Error).message}`;
+        }
+      }
+
+      this.updateTransfer(transfer.id, { status: 'done', bytesTransferred: data.length, name: outputName, note });
+      saveBlobAsFile(outputData, outputName);
     } catch (err) {
       this.updateTransfer(transfer.id, { status: 'error', error: (err as Error).message });
     }

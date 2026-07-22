@@ -95,6 +95,23 @@ for the binding architecture decisions.
       (`rfsv/transfer.ts`, `rfsv/path.ts`) are framework-free and
       `bun test`-covered, same as the rest of the protocol core.
 
+- [x] File-type conversion (`convert/`, SPECSv3.md): an off-by-default
+      "Convert files on transfer" toggle (`OverflowMenu`, persisted via
+      `SettingsService`) that, on download, converts recognized Psion
+      formats to modern equivalents before saving — Word → Markdown
+      (text only), Sketch → PNG, Record (voice memo) → WAV — falling back
+      to the raw file with an inline notice if conversion fails. Upload
+      direction isn't wired up yet: Markdown → Word doesn't exist. The
+      three format decoders (`convert/word.ts`, `convert/sketch.ts`,
+      `convert/record.ts`) plus a from-scratch PNG encoder
+      (`convert/png.ts`, using the Web Compression Streams API so it
+      works identically under `bun test` and in Chrome) are
+      framework-free and `bun test`-covered, verified against real
+      files pulled off a Series 5 (`examples/`) rather than trusted from
+      documentation alone — this caught two real bugs: Record's
+      "standard" codec is A-law-companded, not linear PCM, and Sketch's
+      pixel data is embedded partway through its header, not after it.
+
 **Hardware validation:**
 
 - [x] End-to-end bring-up against a real Psion Series 5 over an FT232-based
