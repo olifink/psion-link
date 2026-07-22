@@ -5,3 +5,4 @@ export type { DecodedRecordAudio } from './record';
 export { decodeSketchFile, sketchToPng } from './sketch';
 export type { DecodedSketch } from './sketch';
 export { encodePng } from './png';
+export { decodeWordParagraphs, wordToMarkdown } from './word';
